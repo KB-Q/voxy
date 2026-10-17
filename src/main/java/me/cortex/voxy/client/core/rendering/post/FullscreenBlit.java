@@ -11,10 +11,10 @@ import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL15C.GL_ELEMENT_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15C.glBindBuffer;
 import static org.lwjgl.opengl.GL30C.glBindVertexArray;
-import static org.lwjgl.opengl.GL45C.glCreateVertexArrays;
+import static org.lwjgl.opengl.GL30C.glGenVertexArrays;
 
 public class FullscreenBlit {
-    private static final int EMPTY_VAO = glCreateVertexArrays();
+    private static final int EMPTY_VAO = glGenVertexArrays();
 
     private final Shader shader;
     public FullscreenBlit(RenderProperties properties, String fragId) {
@@ -40,6 +40,15 @@ public class FullscreenBlit {
 
     public void bind() {
         this.shader.bind();
+    }
+
+    //Real location of a uniform declared with an explicit location
+    public int loc(int logical) {
+        return this.shader.loc(logical);
+    }
+
+    public int uniformLocation(String name) {
+        return org.lwjgl.opengl.GL20C.glGetUniformLocation(this.shader.id(), name);
     }
 
     public void blit() {

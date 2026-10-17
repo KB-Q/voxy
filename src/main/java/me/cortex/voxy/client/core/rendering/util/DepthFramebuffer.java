@@ -4,8 +4,7 @@ import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import org.lwjgl.system.MemoryStack;
 
-import static org.lwjgl.opengl.ARBDirectStateAccess.nglClearNamedFramebufferfv;
-import static org.lwjgl.opengl.ARBDirectStateAccess.nglClearNamedFramebufferiv;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import static org.lwjgl.opengl.GL11C.GL_DEPTH;
 import static org.lwjgl.opengl.GL14.GL_DEPTH_COMPONENT24;
 import static org.lwjgl.opengl.GL30C.*;
@@ -42,15 +41,11 @@ public class DepthFramebuffer {
     }
 
     public void clear(float depth) {
-        try (var stack = MemoryStack.stackPush()) {
-            nglClearNamedFramebufferfv(this.framebuffer.id, GL_DEPTH, 0, stack.nfloat(depth));
-        }
+        GlCompat.clearFramebufferDepth(this.framebuffer.id, depth);
     }
 
     public void clearStencil(int to) {
-        try (var stack = MemoryStack.stackPush()) {
-            nglClearNamedFramebufferiv(this.framebuffer.id, GL_STENCIL, 0, stack.nint(to));
-        }
+        GlCompat.clearFramebufferStencil(this.framebuffer.id, to);
     }
 
     public GlTexture getDepthTex() {

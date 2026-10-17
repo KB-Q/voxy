@@ -6,11 +6,14 @@ import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.rendering.RenderDistanceTracker;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.ViewportSelector;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41LodSelection;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41SectionRenderer;
 import me.cortex.voxy.client.core.rendering.bounding.BoundRenderer;
 import me.cortex.voxy.client.core.rendering.bounding.ColumnStreamedBoundStore;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
@@ -45,7 +48,6 @@ import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteri;
 import static org.lwjgl.opengl.GL11.GL_VIEWPORT;
 import static org.lwjgl.opengl.GL11.glEnable;
 import static org.lwjgl.opengl.GL11.glFinish;
@@ -60,14 +62,17 @@ import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BUFFER;
 import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER_BINDING;
 
 public class VoxyRenderSystem {
+    //Debug: do not cut voxy terrain out of the loaded vanilla chunk volume
+    private static final boolean DEBUG_NO_CHUNK_BOUNDS = Boolean.getBoolean("voxy.debug.noChunkBounds");
     private final WorldEngine worldIn;
 
     private final ModelBakerySubsystem modelService;
     private final RenderGenerationService renderGen;
     private final IGeometryData geometryData;
     private final AsyncNodeManager nodeManager;
-    private final NodeCleaner nodeCleaner;
-    private final HierarchicalOcclusionTraverser traversal;
+    private final NodeCleaner nodeCleaner;//null on GL 4.1
+    private final HierarchicalOcclusionTraverser traversal;//null on GL 4.1
+    private final Gl41LodSelection gl41LodSelection;//GL 4.1 only
 
     private final Cleaner.Cleanable geoRef;
 
@@ -99,6 +104,9 @@ public class VoxyRenderSystem {
 
     private static AbstractSectionRenderer.Factory<?,? extends IGeometryData> getRenderBackendFactory() {
         //TODO: need todo a thing where selects optimal section render based on if supports the pipeline and geometry data type
+        if (GlCompat.GL41) {
+            return Gl41SectionRenderer.FACTORY;
+        }
         return MDICSectionRenderer.FACTORY;
     }
 
@@ -117,10 +125,7 @@ public class VoxyRenderSystem {
         }
 
         //Fking HATE EVERYTHING AAAAAAAAAAAAAAAA
-        int[] oldBufferBindings = new int[10];
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
-        }
+        int[] oldBufferBindings = getSSBOBindings();
 
         try {
             //wait for opengl to be finished, this should hopefully ensure all memory allocations are free
@@ -147,8 +152,15 @@ public class VoxyRenderSystem {
                 }
 
                 this.nodeManager = new AsyncNodeManager(1 << 21, this.geometryData, this.renderGen);
-                this.nodeCleaner = new NodeCleaner(this.nodeManager);
-                this.traversal = new HierarchicalOcclusionTraverser(this.nodeManager, this.nodeCleaner, this.renderGen);
+                if (GlCompat.GL41) {
+                    this.nodeCleaner = null;
+                    this.traversal = null;
+                    this.gl41LodSelection = new Gl41LodSelection(this.nodeManager, this.renderGen, ((BasicSectionGeometryData)this.geometryData).getMaxSectionCount());
+                } else {
+                    this.nodeCleaner = new NodeCleaner(this.nodeManager);
+                    this.traversal = new HierarchicalOcclusionTraverser(this.nodeManager, this.nodeCleaner, this.renderGen);
+                    this.gl41LodSelection = null;
+                }
 
                 world.setDirtyCallback(this.nodeManager::worldEvent);
 
@@ -160,9 +172,14 @@ public class VoxyRenderSystem {
 
             this.pipeline = RenderPipelineFactory.createPipeline(this.properties, this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);
             this.pipeline.setupExtraModelBakeryData(this.modelService);//Configure the model service
+            if (this.gl41LodSelection != null) {
+                this.pipeline.setGl41LodSelection(this.gl41LodSelection);
+            }
 
             //Late stage traversal compile for shaders with taa
-            this.traversal.lateStageCompile(this.pipeline);
+            if (this.traversal != null) {
+                this.traversal.lateStageCompile(this.pipeline);
+            }
 
 
             var sectionRenderer = backendFactory.create(this.pipeline, this.modelService.getStore(), this.geometryData);
@@ -196,9 +213,7 @@ public class VoxyRenderSystem {
             throw e;
         }
 
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
-        }
+        restoreSSBOBindings(oldBufferBindings);
 
         for (int i = 0; i < 12; i++) {
             GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
@@ -290,10 +305,7 @@ public class VoxyRenderSystem {
         TimingStatistics.main.start();
 
         //TODO: optimize
-        int[] oldBufferBindings = new int[10];
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
-        }
+        int[] oldBufferBindings = getSSBOBindings();
 
         GlStateManager._enableDepthTest();
         GlStateManager._depthFunc(this.properties.closerEqualDepthCompare());
@@ -310,13 +322,13 @@ public class VoxyRenderSystem {
 
         glViewport(0, 0, viewport.width, viewport.height);
 
-        int scrWidth  = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_WIDTH);
-        int scrHeight = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_HEIGHT);
+        int scrWidth  = GlCompat.getTextureLevelParameteri(sourceDepthTexture, GL_TEXTURE_WIDTH);
+        int scrHeight = GlCompat.getTextureLevelParameteri(sourceDepthTexture, GL_TEXTURE_HEIGHT);
 
         this.pipeline.preSetup(viewport);
 
         TimingStatistics.E.start();
-        if (this.visbleSectionStream != null && (!VoxyClient.disableSodiumChunkRender()) && !IrisUtil.irisShadowActive()) {
+        if (this.visbleSectionStream != null && (!VoxyClient.disableSodiumChunkRender()) && !IrisUtil.irisShadowActive() && !DEBUG_NO_CHUNK_BOUNDS) {
             if (VoxyClient.isFrexActive()!=(this.columnStreamedBoundStore!=null)) {
                 if (this.columnStreamedBoundStore == null) {
                     this.columnStreamedBoundStore = new ColumnStreamedBoundStore();
@@ -390,9 +402,7 @@ public class VoxyRenderSystem {
 
             //TODO: should/needto actually restore all of these, not just clear them
             //Clear all the bindings
-            for (int i = 0; i < oldBufferBindings.length; i++) {
-                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
-            }
+            restoreSSBOBindings(oldBufferBindings);
             glBlendEquation(GL_FUNC_ADD);
             GlStateManager._blendFuncSeparate(0,0, 0, 0);
             glBlendFunc(0, 0);
@@ -436,6 +446,21 @@ public class VoxyRenderSystem {
     }
 
 
+
+    //There are no SSBOs on GL 4.1
+    private static int[] getSSBOBindings() {
+        int[] bindings = new int[GlCompat.GL41?0:10];
+        for (int i = 0; i < bindings.length; i++) {
+            bindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+        }
+        return bindings;
+    }
+
+    private static void restoreSSBOBindings(int[] bindings) {
+        for (int i = 0; i < bindings.length; i++) {
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, bindings[i]);
+        }
+    }
 
     private void autoBalanceSubDivSize() {
         //only increase quality while there are very few mesh queues, this stops,
@@ -577,8 +602,8 @@ public class VoxyRenderSystem {
 
             this.modelService.shutdown();
             this.renderGen.shutdown();
-            this.traversal.free();
-            this.nodeCleaner.free();
+            if (this.traversal != null) this.traversal.free();
+            if (this.nodeCleaner != null) this.nodeCleaner.free();
             this.geometryData.free();
             if (this.geoRef != null) {
                 this.geoRef.clean();

@@ -8,9 +8,23 @@ layout(binding = 0, std140) uniform SceneUniform {
     vec4 negInnerBlock;
 };
 
+#ifndef GL41
 layout(binding = 1, std430) restrict readonly buffer ChunkPosBuffer {
     ivec2[] chunkPos;
 };
+ivec2 getChunkPos(uint id) {
+    return chunkPos[id];
+}
+#define BASE_INSTANCE gl_BaseInstance
+#else
+//GL 4.1: no SSBOs or base instance, positions come from a texture buffer and the batch offset from a uniform
+layout(binding = 1) uniform isamplerBuffer chunkPosTex;
+uniform int baseInstance;
+ivec2 getChunkPos(uint id) {
+    return texelFetch(chunkPosTex, int(id)).xy;
+}
+#define BASE_INSTANCE baseInstance
+#endif
 
 ivec3 unpackPos(ivec2 pos) {
     return ivec3(pos.y>>10, (pos.x<<12)>>12, ((pos.y<<22)|int(uint(pos.x)>>10))>>10);
@@ -28,9 +42,9 @@ vec2 getTAA();
 #endif
 
 void main() {
-    uint id = (gl_InstanceID<<5)+gl_BaseInstance+(gl_VertexID>>3);
+    uint id = uint((gl_InstanceID<<5)+BASE_INSTANCE+(gl_VertexID>>3));
 
-    ivec3 origin = unpackPos(chunkPos[id])*16;
+    ivec3 origin = unpackPos(getChunkPos(id))*16;
     origin -= cameraBlockPos.xyz;
 
     if (!shouldRender(origin)) {

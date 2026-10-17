@@ -48,6 +48,6 @@
   "idleTimeoutSeconds": 90,
   "totalTimeoutSeconds": 420,
   "compareVoxyOff": true,
-  "requireRenderer": false,
+  "requireRenderer": true,
   "minLodCoverage": 0.05
 }

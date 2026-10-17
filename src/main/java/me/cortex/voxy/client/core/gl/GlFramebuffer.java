@@ -7,7 +7,14 @@ import static org.lwjgl.opengl.GL45C.*;
 public class GlFramebuffer extends TrackedObject {
     public final int id;
     public GlFramebuffer() {
-        this.id = glCreateFramebuffers();
+        this.id = GlCompat.GL41?glGenFramebuffers():glCreateFramebuffers();
+    }
+
+    //GL 4.1 has no named framebuffer functions, bind to edit and restore the previous binding
+    private int bindForEdit() {
+        int prev = glGetInteger(GL_FRAMEBUFFER_BINDING);
+        glBindFramebuffer(GL_FRAMEBUFFER, this.id);
+        return prev;
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture) {
@@ -19,22 +26,50 @@ public class GlFramebuffer extends TrackedObject {
     }
 
     public GlFramebuffer bind(int attachment, int texture, int lvl) {
-        glNamedFramebufferTexture(this.id, attachment, texture, lvl);
+        if (GlCompat.GL41) {
+            int prev = this.bindForEdit();
+            glFramebufferTexture(GL_FRAMEBUFFER, attachment, texture, lvl);
+            glBindFramebuffer(GL_FRAMEBUFFER, prev);
+        } else {
+            glNamedFramebufferTexture(this.id, attachment, texture, lvl);
+        }
         return this;
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture, int lvl) {
-        glNamedFramebufferTexture(this.id, attachment, texture.id, lvl);
-        return this;
+        return this.bind(attachment, texture.id, lvl);
     }
 
     public GlFramebuffer bind(int attachment, GlRenderBuffer buffer) {
-        glNamedFramebufferRenderbuffer(this.id, attachment, GL_RENDERBUFFER, buffer.id);
+        if (GlCompat.GL41) {
+            int prev = this.bindForEdit();
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, buffer.id);
+            glBindFramebuffer(GL_FRAMEBUFFER, prev);
+        } else {
+            glNamedFramebufferRenderbuffer(this.id, attachment, GL_RENDERBUFFER, buffer.id);
+        }
         return this;
     }
 
     public GlFramebuffer setDrawBuffers(int... buffers) {
-        glNamedFramebufferDrawBuffers(this.id, buffers);
+        if (GlCompat.GL41) {
+            int prev = this.bindForEdit();
+            glDrawBuffers(buffers);
+            glBindFramebuffer(GL_FRAMEBUFFER, prev);
+        } else {
+            glNamedFramebufferDrawBuffers(this.id, buffers);
+        }
+        return this;
+    }
+
+    public GlFramebuffer setDrawBuffer(int buffer) {
+        if (GlCompat.GL41) {
+            int prev = this.bindForEdit();
+            glDrawBuffer(buffer);
+            glBindFramebuffer(GL_FRAMEBUFFER, prev);
+        } else {
+            glNamedFramebufferDrawBuffer(this.id, buffer);
+        }
         return this;
     }
 
@@ -46,7 +81,14 @@ public class GlFramebuffer extends TrackedObject {
 
     public GlFramebuffer verify() {
         int code;
-        if ((code = glCheckNamedFramebufferStatus(this.id, GL_FRAMEBUFFER)) != GL_FRAMEBUFFER_COMPLETE) {
+        if (GlCompat.GL41) {
+            int prev = this.bindForEdit();
+            code = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            glBindFramebuffer(GL_FRAMEBUFFER, prev);
+        } else {
+            code = glCheckNamedFramebufferStatus(this.id, GL_FRAMEBUFFER);
+        }
+        if (code != GL_FRAMEBUFFER_COMPLETE) {
             throw new IllegalStateException("Framebuffer incomplete with error code: " + code);
         }
         return this;

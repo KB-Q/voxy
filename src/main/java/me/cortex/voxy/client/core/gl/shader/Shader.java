@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.gl.shader;
 
 import me.cortex.voxy.client.core.gl.Capabilities;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlDebug;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.TrackedObject;
@@ -22,12 +23,21 @@ import static org.lwjgl.opengl.GL20.glUseProgram;
 
 public class Shader extends TrackedObject {
     private final int id;
+    int[] uniformLocations;//Explicit uniform location -> real location, only on GLSL 4.10 (null means identity)
     Shader(int program) {
         id = program;
     }
 
     public int id() {
         return this.id;
+    }
+
+    //Real location of a uniform declared with layout(location = logical)
+    public int loc(int logical) {
+        if (this.uniformLocations == null) {
+            return logical;
+        }
+        return logical < this.uniformLocations.length ? this.uniformLocations[logical] : -1;
     }
 
     public void bind() {
@@ -144,7 +154,10 @@ public class Shader extends TrackedObject {
         }
 
 
+        private Glsl410Transform glsl410;
+
         private int compileToProgram() {
+            this.glsl410 = GlCompat.GL41 ? new Glsl410Transform(this.defines) : null;
             int program = GL20C.glCreateProgram();
             int[] shaders = new int[this.sources.size()];
             {
@@ -160,6 +173,10 @@ public class Shader extends TrackedObject {
 
                     for (var replacement : this.replacements.entrySet()) {
                         src = src.replace(replacement.getKey(), replacement.getValue());
+                    }
+
+                    if (this.glsl410 != null) {
+                        src = this.glsl410.process(src);
                     }
 
                     shaders[i++] = createShader(entry.getKey(), src);
@@ -182,7 +199,13 @@ public class Shader extends TrackedObject {
         public T compile() {
             this.defineIf("IS_INTEL", Capabilities.INSTANCE.isIntel);
             this.defineIf("IS_WINDOWS", Platform.get() == Platform.WINDOWS);
-            return this.constructor.make(this, this.compileToProgram());
+            this.defineIf("GL41", GlCompat.GL41);
+            int program = this.compileToProgram();
+            T shader = this.constructor.make(this, program);
+            if (this.glsl410 != null) {
+                shader.uniformLocations = this.glsl410.apply(program);
+            }
+            return shader;
         }
 
         private static void printProgramLinkLog(int program) {

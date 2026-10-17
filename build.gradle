@@ -224,6 +224,16 @@ dependencies {
 }
 
 //Dev only autotest harness, its own mod in its own source set so it is never part of the release jar
+dependencies {
+    testImplementation platform("org.junit:junit-bom:5.11.4")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
+}
+
 sourceSets {
     autotest {
         compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
@@ -249,6 +259,11 @@ loom {
                     "-Dvoxy.autotest.world=${project.findProperty('voxy.autotest.world') ?: 'voxy-autotest'}",
                     "-Dvoxy.autotest.seed=${project.findProperty('voxy.autotest.seed') ?: '8675309'}",
                     "-Dsodium.checks.issue2561=false"
+            //Extra jvm arguments for experiments, e.g. -Pvoxy.autotest.jvmArgs="-Dvoxy.debug.noChunkBounds=true"
+            def extraJvmArgs = project.findProperty('voxy.autotest.jvmArgs')
+            if (extraJvmArgs) {
+                vmArgs(*extraJvmArgs.toString().trim().split(/\s+/))
+            }
         }
     }
 }

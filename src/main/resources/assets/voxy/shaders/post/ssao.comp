@@ -1,7 +1,13 @@
 #version 450
+//Also compiled as a fullscreen fragment shader (SSAO_FRAGMENT) for GL 4.1, which has no compute or image stores
+#ifndef SSAO_FRAGMENT
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(binding = 0, rgba8) uniform writeonly restrict image2D colourTexOut;
+#else
+layout(location = 0) out vec4 fragOut;
+uniform ivec2 outputSize;
+#endif
 layout(binding = 1) uniform sampler2D colourTex;
 layout(binding = 2) uniform sampler2D depthTex;
 
@@ -202,7 +208,7 @@ float computeAO(vec3 uvDepth, vec3 worldNorm)
             offset_view = rev3d(sourceInvProj, vec3(sample_uv, depth));
         } else {
             uint meta = uint(255.0f*texture(colourTex, sample_uv).w);
-            if ((meta&(1<<6))==0) {
+            if ((meta&(1u<<6))==0u) {
                 continue;
             }
             offset_view = rev3d(invProj, vec3(sample_uv, depth));
@@ -245,12 +251,18 @@ vec3 face2norm(uint face) {
 }
 
 void main() {
+    #ifdef SSAO_FRAGMENT
+    size = outputSize;
+    uvec2 gid = uvec2(gl_FragCoord.xy);
+    #else
     size = imageSize(colourTexOut);//TODO: dont use imageSize as it is slow, swap for uniform
-    if (any(lessThanEqual(size, gl_GlobalInvocationID.xy))) {
+    uvec2 gid = gl_GlobalInvocationID.xy;
+    #endif
+    if (any(lessThanEqual(uvec2(size), gid))) {
         return;
     }
     scale = vec2(1.0f)/size;
-    vec2 point = vec2(vec2(gl_GlobalInvocationID.xy)+0.5f)*scale;//Offset to the center of the textile
+    vec2 point = vec2(vec2(gid)+0.5f)*scale;//Offset to the center of the textile
     float depth = texture(depthTex, point).r;
     vec4 ocolour = vec4(0);
     if (depth!=NEAR && depth!=FAR) {
@@ -261,7 +273,7 @@ void main() {
             uint metadata = uint(colour.w*255.0f);
             uint face = metadata&7u;
             uint lod = (metadata>>3)&7u;
-            bool hasAO = (metadata&(1<<6))!=0;
+            bool hasAO = (metadata&(1u<<6))!=0u;
 
 
             ocolour = colour;
@@ -273,5 +285,9 @@ void main() {
             }
         }
     }
-    imageStore(colourTexOut, ivec2(gl_GlobalInvocationID.xy), ocolour);
+    #ifdef SSAO_FRAGMENT
+    fragOut = ocolour;
+    #else
+    imageStore(colourTexOut, ivec2(gid), ocolour);
+    #endif
 }

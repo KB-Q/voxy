@@ -36,7 +36,7 @@ public class GPUTiming {
 
     public void setEnabled(boolean enable) {
         if (this.enabled != enable) {
-            this.enabled = enable;
+            this.enabled = enable && !me.cortex.voxy.client.core.gl.GlCompat.GL41;//timestamp query buffers need GL 4.4
         }
     }
 
@@ -188,7 +188,7 @@ public class GPUTiming {
             glQueryCounter(this.query, GL_TIMESTAMP);//This should be gpu side, so should be fast
             glFinish();
             glGetQueryBufferObjectui64v(this.query, this.store.id, GL_QUERY_RESULT_NO_WAIT, slot*8L);
-            glMemoryBarrier(-1);
+            if (!me.cortex.voxy.client.core.gl.GlCompat.GL41) glMemoryBarrier(-1);
         }
 
         public void download(TimingDataConsumer consumer) {

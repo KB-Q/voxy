@@ -60,9 +60,11 @@ public class VoxyClient implements ClientModInitializer {
         }
 
         //The instance (storage + ingest) does not need a render backend, so it is still created when rendering is unsupported
-        boolean renderSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
+        boolean renderSupported = Capabilities.INSTANCE.backend != Capabilities.Backend.NONE && !Capabilities.INSTANCE.hasBrokenDepthSampler;
         if (!renderSupported) {
-            Logger.error("Voxy rendering is unsupported on this system (no OpenGL 4.6 compute + indirect count draws), LoD data will still be ingested and stored");
+            Logger.error("Voxy rendering is unsupported on this system (needs OpenGL 4.6 compute + indirect count draws, or OpenGL 4.1 with ARB_texture_storage), LoD data will still be ingested and stored");
+        } else {
+            Logger.info("Voxy render backend: " + Capabilities.INSTANCE.backend);
         }
 
         boolean instanceAllowed = true;
@@ -85,7 +87,7 @@ public class VoxyClient implements ClientModInitializer {
         if (instanceAllowed && renderSupported) {
             SharedIndexBuffer.INSTANCE.id();
 
-            if (!Capabilities.INSTANCE.subgroup) {
+            if (!Capabilities.INSTANCE.subgroup && Capabilities.INSTANCE.backend == Capabilities.Backend.GL46) {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
             }
         }

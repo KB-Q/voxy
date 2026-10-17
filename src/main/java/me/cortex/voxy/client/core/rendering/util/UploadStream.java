@@ -3,11 +3,13 @@ package me.cortex.voxy.client.core.rendering.util;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlFence;
 import me.cortex.voxy.client.core.gl.GlPersistentMappedBuffer;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.AllocationArena;
 import me.cortex.voxy.common.util.MemoryBuffer;
+import org.lwjgl.system.MemoryUtil;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -26,7 +28,11 @@ public class UploadStream {
     public static final int BASE_ALLOCATION_ALIGNEMENT = Math.max(Capabilities.INSTANCE.ssboBindingAlignment, 16);
 
     private final AllocationArena allocationArena = new AllocationArena();
-    private final GlPersistentMappedBuffer uploadBuffer;
+    private final GlPersistentMappedBuffer uploadBuffer;//null on GL 4.1
+    //GL 4.1 has no persistent mapping and glCopyBufferSubData is a slow cpu path on macOS, so uploads are staged in
+    // cpu memory and written with glBufferSubData on commit
+    private final long stagingBase;
+    private final long size;
 
     private final Deque<UploadFrame> frames = new ArrayDeque<>();
     private final LongArrayList thisFrameAllocations = new LongArrayList();
@@ -35,7 +41,14 @@ public class UploadStream {
     private static final boolean USE_COHERENT = false;
 
     public UploadStream(long size) {
-        this.uploadBuffer = new GlPersistentMappedBuffer(size,GL_CLIENT_STORAGE_BIT|GL_MAP_WRITE_BIT|GL_MAP_UNSYNCHRONIZED_BIT|(USE_COHERENT?GL_MAP_COHERENT_BIT:GL_MAP_FLUSH_EXPLICIT_BIT)).name("UploadStream");
+        this.size = size;
+        if (GlCompat.GL41) {
+            this.uploadBuffer = null;
+            this.stagingBase = MemoryUtil.nmemAlloc(size);
+        } else {
+            this.uploadBuffer = new GlPersistentMappedBuffer(size, GL_CLIENT_STORAGE_BIT | GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT | (USE_COHERENT ? GL_MAP_COHERENT_BIT : GL_MAP_FLUSH_EXPLICIT_BIT)).name("UploadStream");
+            this.stagingBase = this.uploadBuffer.addr();
+        }
         this.allocationArena.setLimit(size);
     }
 
@@ -54,11 +67,11 @@ public class UploadStream {
 
         this.uploadList.add(new UploadData(buffer, addr, destOffset, size));
 
-        return this.uploadBuffer.addr() + addr;
+        return this.stagingBase + addr;
     }
 
     public long rawUpload(int size) {
-        return this.uploadBuffer.addr() + this.rawUploadAddress(size);
+        return this.stagingBase + this.rawUploadAddress(size);
     }
 
     public long rawUploadAddress(int size) {
@@ -71,13 +84,13 @@ public class UploadStream {
         size = alignUp(size, BASE_ALLOCATION_ALIGNEMENT);
         //size = (size+15)&~15;//Alignment to 16 bytes
 
-        if (size > this.uploadBuffer.size()) {
+        if (size > this.size) {
             throw new IllegalArgumentException();
         }
 
         long addr;
         if (this.caddr == -1 || !this.allocationArena.expand(this.caddr, (int) size)) {
-            if ((!USE_COHERENT)&&this.caddr!=-1) {
+            if ((!USE_COHERENT)&&this.caddr!=-1&&this.uploadBuffer!=null) {
                 glFlushMappedNamedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
             }
             this.caddr = this.allocationArena.alloc((int) size);//TODO: replace with allocFromLargest
@@ -104,7 +117,7 @@ public class UploadStream {
             this.offset += size;
         }
 
-        if (this.caddr + size > this.uploadBuffer.size()) {
+        if (this.caddr + size > this.size) {
             throw new IllegalStateException();
         }
 
@@ -112,6 +125,10 @@ public class UploadStream {
     }
 
     public void commit() {
+        if (this.uploadBuffer == null) {
+            this.commit41();
+            return;
+        }
         if ((!USE_COHERENT)&&this.caddr != -1) {
             //Flush this allocation
             glFlushMappedNamedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
@@ -132,6 +149,19 @@ public class UploadStream {
 
         this.caddr = -1;
         this.offset = 0;
+    }
+
+    private void commit41() {
+        for (var entry : this.uploadList) {
+            entry.target.subData(entry.targetOffset, this.stagingBase + entry.uploadOffset, entry.size);
+        }
+        this.uploadList.clear();
+        this.caddr = -1;
+        this.offset = 0;
+        //The driver copies the data during glBufferSubData, so the staging memory can be reused straight away
+        // raw uploads (not via upload()) are also done with by the time commit is called
+        this.thisFrameAllocations.forEach(this.allocationArena::free);
+        this.thisFrameAllocations.clear();
     }
 
     public void tick() {
@@ -161,10 +191,13 @@ public class UploadStream {
     }
 
     public long getBaseAddress() {
-        return this.uploadBuffer.addr();
+        return this.stagingBase;
     }
 
     public int getRawBufferId() {
+        if (this.uploadBuffer == null) {
+            throw new IllegalStateException("No gpu side upload buffer on the GL 4.1 backend");
+        }
         return this.uploadBuffer.id;
     }
 

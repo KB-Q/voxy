@@ -29,6 +29,7 @@ import static org.lwjgl.opengl.GL45C.glDeleteTextures;
 import static org.lwjgl.opengl.GL45C.glFinish;
 import static org.lwjgl.opengl.GL45C.glGetInteger;
 import static org.lwjgl.opengl.GL45C.glGetString;
+import static org.lwjgl.opengl.GL31C.GL_MAX_TEXTURE_BUFFER_SIZE;
 import static org.lwjgl.opengl.NVXGPUMemoryInfo.*;
 
 public class Capabilities {
@@ -53,6 +54,14 @@ public class Capabilities {
     public final boolean isAmd;
     public final boolean nvBarryCoords;
     public final boolean hasBrokenDepthSampler;
+
+    public enum Backend {
+        GL46,//Compute + indirect count draws, the gpu driven renderer
+        GL41,//Texture buffers + instanced draws, cpu traversal (macOS)
+        NONE
+    }
+    public final Backend backend;
+    public final int maxTextureBufferSize;//In texels
 
     public Capabilities() {
         var cap = GL.getCapabilities();
@@ -107,6 +116,9 @@ public class Capabilities {
 
         this.nvBarryCoords = cap.GL_NV_fragment_shader_barycentric;
 
+        this.maxTextureBufferSize = glGetInteger(GL_MAX_TEXTURE_BUFFER_SIZE);
+        this.backend = selectBackend(cap, this.compute && this.indirectParameters);
+
         if (this.compute&&this.isAmd) {
             this.hasBrokenDepthSampler = testDepthSampler();
             if (this.hasBrokenDepthSampler) {
@@ -118,6 +130,27 @@ public class Capabilities {
     }
 
     public static void init() {
+    }
+
+    //-Dvoxy.backend=auto|gl46|gl41 overrides the automatic choice (if the context can run it)
+    private static Backend selectBackend(org.lwjgl.opengl.GLCapabilities cap, boolean gl46Capable) {
+        boolean gl41Capable = cap.OpenGL41 && cap.GL_ARB_texture_storage;
+        String requested = System.getProperty("voxy.backend", "auto").toLowerCase(Locale.ROOT);
+        switch (requested) {
+            case "gl46", "mdic" -> {
+                if (gl46Capable) return Backend.GL46;
+                Logger.error("Requested gl46 backend but the context does not support it");
+            }
+            case "gl41" -> {
+                if (gl41Capable) return Backend.GL41;
+                Logger.error("Requested gl41 backend but the context does not support it");
+            }
+            case "auto" -> {}
+            default -> Logger.error("Unknown voxy.backend value: " + requested);
+        }
+        if (gl46Capable) return Backend.GL46;
+        if (gl41Capable) return Backend.GL41;
+        return Backend.NONE;
     }
 
     private static boolean testDepthSampler() {

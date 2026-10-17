@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core.gl.shader;
 
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlDebug;
 import me.cortex.voxy.client.core.gl.GlTexture;
@@ -134,7 +135,7 @@ public class AutoBindingShader extends Shader {
             for (var binding : this.textureBindings) {
                 if (binding.texture != null) {
                     binding.texture.assertNotFreed();
-                    glBindTextureUnit(binding.unit, binding.texture.id);
+                    GlCompat.bindTextureUnit(binding.unit, binding.texture.id);
                 }
                 if (binding.sampler != -1) {
                     glBindSampler(binding.unit, binding.sampler);

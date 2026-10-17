@@ -74,7 +74,7 @@ uvec3 makeRemainingAttributes(const in BlockModel model, const in Quad quad, uin
     uint tintColour = model.colourTint;
 
     if (modelHasBiomeLUT(model)) {
-        tintColour = colourData[tintColour + extractBiomeId(quad)];
+        tintColour = getModelColour(tintColour + extractBiomeId(quad));
     }
 
     #ifdef PATCHED_SHADER
@@ -122,7 +122,7 @@ void setupQuad(out QuadData quad, const in Quad rawQuad, uvec2 sPos, bool genera
 
     uint face = extractFace(rawQuad);
     uint modelId = extractStateId(rawQuad);
-    BlockModel model = modelData[modelId];
+    BlockModel model = getModel(modelId);
     uint faceData = model.faceData[face];
     ivec2 quadSize = extractSize(rawQuad);
 

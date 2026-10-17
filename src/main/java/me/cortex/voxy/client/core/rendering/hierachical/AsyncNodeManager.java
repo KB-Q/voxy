@@ -6,10 +6,13 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.client.core.rendering.GeometryCache;
 import me.cortex.voxy.client.core.rendering.SectionUpdateRouter;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41Cleaner;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41NodeMirror;
 import me.cortex.voxy.client.core.rendering.building.BuiltSection;
 import me.cortex.voxy.client.core.rendering.building.RenderGenerationService;
 import me.cortex.voxy.client.core.rendering.section.geometry.BasicAsyncGeometryManager;
@@ -177,14 +180,15 @@ public class AsyncNodeManager {
         return resultSet;
     }
 
-    private final Shader scatterWrite = Shader.make()
+    //Compute shaders are not available on the GL 4.1 backend, it applies the results on the cpu (see tick41)
+    private final Shader scatterWrite = GlCompat.GL41?null:Shader.make()
             .define("INPUT_BUFFER_BINDING", 0)
             .define("OUTPUT_BUFFER1_BINDING", 1)
             .define("OUTPUT_BUFFER2_BINDING", 2)
             .add(ShaderType.COMPUTE, "voxy:util/scatter.comp")
             .compile();
 
-    private final Shader multiMemcpy = Shader.make()
+    private final Shader multiMemcpy = GlCompat.GL41?null:Shader.make()
             .define("INPUT_HEADER_BUFFER_BINDING", 0)
             .define("INPUT_DATA_BUFFER_BINDING", 1)
             .define("OUTPUT_BUFFER_BINDING", 2)
@@ -520,19 +524,7 @@ public class AsyncNodeManager {
             return;
         }
 
-        //top level node add/remove
-        if (!results.tlnDelta.isEmpty()) {
-            var iter = results.tlnDelta.intIterator();
-            while (iter.hasNext()) {
-                int val = iter.nextInt();
-                if ((val&(1<<31))!=0) {//Add node
-                    this.tlnAddCallback.accept(val&(-1>>>1));
-                } else {
-                    this.tlnRemoveCallback.accept(val);
-                }
-            }
-            //Dont need to clear as is not used again
-        }
+        this.applyTopLevelNodeChanges(results);
 
         {//Update basic geometry data
             var store = (BasicSectionGeometryData)this.geometryData;
@@ -596,6 +588,74 @@ public class AsyncNodeManager {
         }
         TimingStatistics.C.stop();
 
+        this.releaseResults(results);
+    }
+
+    //Render thread synchronization for the GL 4.1 backend: same results as tick, applied without compute shaders
+    // geometry is written with glBufferSubData, node and section metadata go to cpu mirrors, cleaner ids to the cpu cleaner
+    public void tick41(Gl41NodeMirror mirror, Gl41Cleaner cleaner) {
+        if (this.uncaughtException != null) {
+            throw new RuntimeException(this.uncaughtException);//Propagate internal exception
+        }
+        var results = (SyncResults)RESULT_HANDLE.getAndSet(this, null);//Acquire the results
+        if (results == null) {
+            return;
+        }
+
+        this.applyTopLevelNodeChanges(results);
+
+        var store = (BasicSectionGeometryData)this.geometryData;
+        store.setSectionCount(results.geometrySectionCount);
+
+        TimingStatistics.A.start();
+        var upload = results.geometryUpload;
+        if (!upload.dataUploadPoints.isEmpty()) {
+            var geometryBuffer = store.getGeometryBuffer();
+            int copies = upload.dataUploadPoints.size();
+            long header = upload.scratchHeaderBuffer.address;
+            long data = upload.scratchDataBuffer.address;
+            for (int i = 0; i < copies; i++) {
+                long h = header + i*16L;
+                long src = Integer.toUnsignedLong(MemoryUtil.memGetInt(h));
+                long dst = Integer.toUnsignedLong(MemoryUtil.memGetInt(h+4));
+                long count = Integer.toUnsignedLong(MemoryUtil.memGetInt(h+8));
+                geometryBuffer.subData(dst*8L, data + src*8L, count*8L);
+            }
+        }
+        TimingStatistics.A.stop();
+
+        TimingStatistics.B.start();
+        if (!results.scatterWriteLocationMap.isEmpty()) {
+            mirror.applyScatter(results.scatterWriteBuffer.address, results.scatterWriteLocationMap.size());
+        }
+        TimingStatistics.B.stop();
+
+        TimingStatistics.C.start();
+        if (!results.cleanerOperations.isEmpty()) {
+            cleaner.updateIds(results.cleanerOperations);
+        }
+        TimingStatistics.C.stop();
+
+        this.releaseResults(results);
+    }
+
+    private void applyTopLevelNodeChanges(SyncResults results) {
+        //top level node add/remove
+        if (!results.tlnDelta.isEmpty()) {
+            var iter = results.tlnDelta.intIterator();
+            while (iter.hasNext()) {
+                int val = iter.nextInt();
+                if ((val&(1<<31))!=0) {//Add node
+                    this.tlnAddCallback.accept(val&(-1>>>1));
+                } else {
+                    this.tlnRemoveCallback.accept(val);
+                }
+            }
+            //Dont need to clear as is not used again
+        }
+    }
+
+    private void releaseResults(SyncResults results) {
         this.currentMaxNodeId = results.currentMaxNodeId;
         this.usedGeometryAmount = results.usedGeometry;
 
@@ -780,8 +840,8 @@ public class AsyncNodeManager {
             result.scatterWriteBuffer.free();
         }
 
-        this.scatterWrite.free();
-        this.multiMemcpy.free();
+        if (this.scatterWrite != null) this.scatterWrite.free();
+        if (this.multiMemcpy != null) this.multiMemcpy.free();
         this.geometryCache.free();
     }
 

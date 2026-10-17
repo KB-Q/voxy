@@ -1,11 +1,13 @@
 package me.cortex.voxy.client.core;
 
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.RenderStatistics;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41LodSelection;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
 import me.cortex.voxy.client.core.rendering.hierachical.HierarchicalOcclusionTraverser;
 import me.cortex.voxy.client.core.rendering.hierachical.NodeCleaner;
@@ -61,6 +63,9 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
     protected AbstractSectionRenderer<?,?> sectionRenderer;
 
+    //Set on the GL 4.1 backend, replaces the node cleaner and the gpu traversal (which are null there)
+    private Gl41LodSelection gl41LodSelection;
+
     private final FullscreenBlit depthStencilSetup;
 
     public final DepthFramebuffer fb = new DepthFramebuffer(GL_DEPTH24_STENCIL8);
@@ -92,6 +97,15 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
     public final void setSectionRenderer(AbstractSectionRenderer<?,?> sectionRenderer) {//Stupid java ordering not allowing something pre super
         if (this.sectionRenderer != null) throw new IllegalStateException();
         this.sectionRenderer = sectionRenderer;
+    }
+
+    public final void setGl41LodSelection(Gl41LodSelection selection) {
+        if (this.gl41LodSelection != null) throw new IllegalStateException();
+        this.gl41LodSelection = selection;
+    }
+
+    public Gl41LodSelection getGl41LodSelection() {
+        return this.gl41LodSelection;
     }
 
     //Called before the pipeline starts running, used to update uniforms etc
@@ -145,7 +159,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
     }
 
     protected void initDepthStencil(Viewport<?> viewport, int sourceDepthTexture, int targetFb, int srcWidth, int srcHeight, int width, int height) {
-        glClearNamedFramebufferfi(targetFb, GL_DEPTH_STENCIL, 0, this.properties.clearDepth(), 1);
+        GlCompat.clearFramebufferDepthStencil(targetFb, this.properties.clearDepth(), 1);
         // using blit to copy depth from mismatched depth formats is not portable so instead a full screen pass is performed for a depth copy
         // the mismatched formats in this case is the d32 to d24s8
         glBindFramebuffer(GL30.GL_FRAMEBUFFER, targetFb);
@@ -161,9 +175,9 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
 
         this.depthStencilSetup.bind();
-        glBindTextureUnit(0, sourceDepthTexture);
+        GlCompat.bindTextureUnit(0, sourceDepthTexture);
         glBindSampler(0, DEPTH_SAMPLER);
-        glUniform2f(1,((float)width)/srcWidth, ((float)height)/srcHeight);
+        glUniform2f(this.depthStencilSetup.loc(1),((float)width)/srcWidth, ((float)height)/srcHeight);
         glDepthMask(true);
         glColorMask(false,false,false,false);
         this.depthStencilSetup.blit();
@@ -185,11 +199,11 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
         glBindFramebuffer(GL30.GL_FRAMEBUFFER, dstFB);
 
         blitShader.bind();
-        glBindTextureUnit(0, srcDepthTex);
+        GlCompat.bindTextureUnit(0, srcDepthTex);
         new Matrix4f(viewport.MVP).invert().getToAddress(SCRATCH);
-        nglUniformMatrix4fv(1, 1, false, SCRATCH);//inverse fromProjection
+        nglUniformMatrix4fv(blitShader.loc(1), 1, false, SCRATCH);//inverse fromProjection
         targetTransform.getToAddress(SCRATCH);//new Matrix4f(tooProjection).mul(vp.modelView).get(data);
-        nglUniformMatrix4fv(2, 1, false, SCRATCH);//tooProjection
+        nglUniformMatrix4fv(blitShader.loc(2), 1, false, SCRATCH);//tooProjection
 
         glEnable(GL_DEPTH_TEST);
         blitShader.blit();
@@ -198,6 +212,13 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
     }
 
     protected void innerPrimaryWork(Viewport<?> viewport, int depthBuffer) {
+        if (this.gl41LodSelection != null) {
+            //No hiz occlusion, download stream or gpu traversal, the selection runs on the cpu
+            do {
+                this.gl41LodSelection.run(viewport);
+            } while (this.frexStillHasWork.getAsBoolean());
+            return;
+        }
 
         //Compute the mip chain
         viewport.hiZBuffer.buildMipChain(depthBuffer, viewport.width, viewport.height);
@@ -238,7 +259,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
     public void addDebug(List<String> debug) {
         this.sectionRenderer.addDebug(debug);
-        this.traversal.addDebug(debug);
+        if (this.traversal != null) this.traversal.addDebug(debug);
         RenderStatistics.addDebug(debug);
     }
 

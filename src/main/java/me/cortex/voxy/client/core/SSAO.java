@@ -1,5 +1,11 @@
 package me.cortex.voxy.client.core;
 
+import me.cortex.voxy.client.core.gl.GlCompat;
+import me.cortex.voxy.client.core.gl.GlFramebuffer;
+import me.cortex.voxy.client.core.rendering.post.FullscreenBlit;
+import java.util.ArrayList;
+import static org.lwjgl.opengl.GL30C.*;
+import static org.lwjgl.opengl.GL33C.glGenSamplers;
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.gl.shader.Shader;
@@ -57,7 +63,10 @@ public class SSAO {
         }
     }
 
-    private final Shader ssaoCompute;
+    private final Shader ssaoCompute;//null on GL 4.1
+    private final FullscreenBlit ssaoFragment;//GL 4.1 only, the same shader run as a fullscreen pass
+    private final int outputSizeLocation;
+    private final GlFramebuffer fragmentTarget;
     private final boolean isBetterSSAO;
     private final int spp;
 
@@ -67,9 +76,10 @@ public class SSAO {
     }
 
     public SSAO(RenderProperties properties, boolean betterSSAO, int samples) {
-        var builder = Shader.make()
+        Shader.Builder<Shader> builder = GlCompat.GL41 ? null : Shader.make()
                 .apply(properties::apply)
                 .add(ShaderType.COMPUTE, "voxy:post/ssao.comp");
+        var defines = new ArrayList<java.util.function.Consumer<Shader.Builder<Shader>>>();
 
         this.spp = samples;
 
@@ -77,9 +87,9 @@ public class SSAO {
 
         this.isBetterSSAO = betterSSAO;
         if (betterSSAO) {
-            builder.define("BETTER_SSAO")
+            defines.add(b->b.define("BETTER_SSAO")
                     .defineIf("SSAO_STEPS", samples!=0, samples)
-                    .defineIf("USE_GENERATED_SAMPLE_POINTS", useConstArray);
+                    .defineIf("USE_GENERATED_SAMPLE_POINTS", useConstArray));
 
             if (useConstArray) {
                 String array = "";
@@ -99,13 +109,28 @@ public class SSAO {
                         array += ", ";
                     }
                 }
-                builder.replace("%%CONST_ARRAY%%", array);
+                String finalArray = array;
+                defines.add(b->b.replace("%%CONST_ARRAY%%", finalArray));
             }
         }
 
-        this.ssaoCompute = builder.compile();
+        if (GlCompat.GL41) {
+            this.ssaoCompute = null;
+            this.ssaoFragment = new FullscreenBlit(properties, "voxy:post/ssao.comp", b->{
+                b.define("SSAO_FRAGMENT");
+                defines.forEach(d->d.accept((Shader.Builder<Shader>)(Object)b));
+            });
+            this.outputSizeLocation = this.ssaoFragment.uniformLocation("outputSize");
+            this.fragmentTarget = new GlFramebuffer();
+        } else {
+            defines.forEach(d->d.accept(builder));
+            this.ssaoCompute = builder.compile();
+            this.ssaoFragment = null;
+            this.outputSizeLocation = -1;
+            this.fragmentTarget = null;
+        }
 
-        this.depthSampler = glCreateSamplers();
+        this.depthSampler = glGenSamplers();
         //UHHHH IS THIS EVEN VALID FOR A DEPTH SAMPLER????
         if (this.isBetterSSAO) {
             glSamplerParameteri(this.depthSampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
@@ -121,52 +146,83 @@ public class SSAO {
     }
 
     public void computeSSAO(Viewport<?> viewport, GlTexture colourOut, GlTexture colourIn, GlTexture baseDepthTex, int sourceDepthTexture) {
-        this.ssaoCompute.bind();
+        if (this.ssaoFragment != null) {
+            this.ssaoFragment.bind();
+        } else {
+            this.ssaoCompute.bind();
+        }
         //The matrices
         try (var stack = MemoryStack.stackPush()) {
             long ptr = stack.nmalloc(4*4*4);
             var scratch = new Matrix4f();
             if (this.isBetterSSAO) {
                 viewport.projection.getToAddress(ptr);
-                nglUniformMatrix4fv(4, 1, false, ptr);//Proj
+                nglUniformMatrix4fv(this.loc(4), 1, false, ptr);//Proj
                 viewport.projection.invert(scratch).getToAddress(ptr);
-                nglUniformMatrix4fv(5, 1, false, ptr);//invProj
+                nglUniformMatrix4fv(this.loc(5), 1, false, ptr);//invProj
                 viewport.modelView.getToAddress(ptr);
-                nglUniformMatrix4fv(6, 1, false, ptr);//MV (the normal matrix)
+                nglUniformMatrix4fv(this.loc(6), 1, false, ptr);//MV (the normal matrix)
                 viewport.vanillaProjection.invert(scratch).getToAddress(ptr);
-                nglUniformMatrix4fv(7, 1, false, ptr);//sourceInvProj
+                nglUniformMatrix4fv(this.loc(7), 1, false, ptr);//sourceInvProj
             } else {
                 viewport.MVP.getToAddress(ptr);
-                nglUniformMatrix4fv(3, 1, false, ptr);//MVP
+                nglUniformMatrix4fv(this.loc(3), 1, false, ptr);//MVP
                 viewport.MVP.invert(scratch).getToAddress(ptr);
-                nglUniformMatrix4fv(4, 1, false, ptr);//invMVP
+                nglUniformMatrix4fv(this.loc(4), 1, false, ptr);//invMVP
             }
         }
 
-        glBindImageTexture(0, colourOut.id, 0, false,0, GL_READ_WRITE, GL_RGBA8);
-        glBindTextureUnit(1, colourIn.id);
+        if (this.ssaoFragment == null) {
+            glBindImageTexture(0, colourOut.id, 0, false,0, GL_READ_WRITE, GL_RGBA8);
+        }
+        GlCompat.bindTextureUnit(1, colourIn.id);
         glBindSampler(1,0);
-        glBindTextureUnit(2, baseDepthTex.id);
+        GlCompat.bindTextureUnit(2, baseDepthTex.id);
         glBindSampler(2, this.depthSampler);
 
         if (this.isBetterSSAO) {
-            glBindTextureUnit(3, sourceDepthTexture);
+            GlCompat.bindTextureUnit(3, sourceDepthTexture);
             glBindSampler(3, this.depthSampler);
         }
 
-        glDispatchCompute((viewport.width+7)/8, (viewport.height+7)/8, 1);
+        if (this.ssaoFragment != null) {
+            //Separate framebuffer with only the output attached so the depth texture can be sampled
+            int prevFb = glGetInteger(GL_FRAMEBUFFER_BINDING);
+            this.fragmentTarget.bind(GL_COLOR_ATTACHMENT0, colourOut);
+            glBindFramebuffer(GL_FRAMEBUFFER, this.fragmentTarget.id);
+            glUniform2i(this.outputSizeLocation, viewport.width, viewport.height);
+            boolean depthTest = glIsEnabled(GL_DEPTH_TEST);
+            boolean stencilTest = glIsEnabled(GL_STENCIL_TEST);
+            boolean blend = glIsEnabled(GL_BLEND);
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_STENCIL_TEST);
+            glDisable(GL_BLEND);
+            this.ssaoFragment.blit();
+            if (depthTest) glEnable(GL_DEPTH_TEST);
+            if (stencilTest) glEnable(GL_STENCIL_TEST);
+            if (blend) glEnable(GL_BLEND);
+            glBindFramebuffer(GL_FRAMEBUFFER, prevFb);
+        } else {
+            glDispatchCompute((viewport.width+7)/8, (viewport.height+7)/8, 1);
+        }
 
-        glBindTextureUnit(1, 0);
+        GlCompat.bindTextureUnit(1, 0);
         glBindSampler(1,0);
-        glBindTextureUnit(2, 0);
+        GlCompat.bindTextureUnit(2, 0);
         glBindSampler(2, 0);
-        glBindTextureUnit(3, 0);
+        GlCompat.bindTextureUnit(3, 0);
         glBindSampler(3, 0);
+    }
+
+    private int loc(int logical) {
+        return this.ssaoFragment != null ? this.ssaoFragment.loc(logical) : logical;
     }
 
     public void free() {
         glDeleteSamplers(this.depthSampler);
-        this.ssaoCompute.free();
+        if (this.ssaoCompute != null) this.ssaoCompute.free();
+        if (this.ssaoFragment != null) this.ssaoFragment.delete();
+        if (this.fragmentTarget != null) this.fragmentTarget.free();
     }
 
     public void addDebugInfo(List<String> debugLines) {

@@ -17,13 +17,13 @@ layout(binding = 2) uniform sampler2D depthTex;
 //TODO: need to fix when merged quads have discardAlpha set to false but they span multiple tiles
 // however they are not a full block
 
-layout(location = 0) in flat uvec4 interData;
+layout(location = 0) flat in uvec4 interData;
 #ifndef USE_NV_BARRY
 layout(location = 1) in vec2 uv;
 #endif
 
 #ifdef DEBUG_RENDER
-layout(location = 7) in flat uint quadDebug;
+layout(location = 7) flat in uint quadDebug;
 #endif
 
 
@@ -37,7 +37,11 @@ layout(location = 0) out vec4 outColour;
 
 #endif
 
+#ifdef GL41
+#import <voxy:lod/gl41/bindings.glsl>
+#else
 #import <voxy:lod/gl46/bindings.glsl>
+#endif
 #import <voxy:lod/lighting.glsl>
 
 
@@ -144,7 +148,7 @@ void main() {
     // fragments, we do this here after derivative computation
     //Trying it with all shaders
     //#ifdef PATCHED_SHADER
-    #ifndef PATCHED_SHADER_ALLOW_DERIVATIVES
+    #if !defined(PATCHED_SHADER_ALLOW_DERIVATIVES) && !defined(GL41)
     if (gl_HelperInvocation) {
         return;
     }
@@ -179,7 +183,7 @@ void main() {
         #endif
     }
 
-    #ifndef PATCHED_SHADER_ALLOW_DERIVATIVES
+    #if !defined(PATCHED_SHADER_ALLOW_DERIVATIVES) && !defined(GL41)
     if (gl_HelperInvocation) {
         return;
     }
@@ -200,7 +204,7 @@ void main() {
 
     #else
     uint modelId = getModelId();
-    BlockModel model = modelData[modelId];
+    BlockModel model = getModel(modelId);
     uint tintingFunction = tintingState();
     bool doTint = tintingFunction==2;//Always tint if function == 2
     if (tintingFunction==1) {//Partial tint

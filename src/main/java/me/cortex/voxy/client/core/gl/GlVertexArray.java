@@ -14,7 +14,7 @@ public class GlVertexArray extends TrackedObject {
     private int[] indices = new int[0];
     private int stride;
     public GlVertexArray() {
-        this.id = glCreateVertexArrays();
+        this.id = GlCompat.GL41?glGenVertexArrays():glCreateVertexArrays();//Attribute setup below is DSA only, the GL 4.1 backend pulls vertex data from texture buffers
     }
 
     @Override

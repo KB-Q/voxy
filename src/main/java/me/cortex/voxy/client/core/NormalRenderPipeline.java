@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core;
 
+import me.cortex.voxy.client.core.gl.GlCompat;
 import com.mojang.blaze3d.systems.RenderSystem;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
@@ -88,11 +89,13 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
             this.fbSSAO.bind(this.fb.getDepthAttachmentType(), this.fb.getDepthTex()).bind(GL_COLOR_ATTACHMENT0, this.colourSSAOTex).verify();
 
 
-            glTextureParameterf(this.colourTex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameterf(this.colourTex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTextureParameterf(this.colourSSAOTex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameterf(this.colourSSAOTex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
+            GlCompat.textureParameteri(this.colourTex.id, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GlCompat.textureParameteri(this.colourTex.id, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            GlCompat.textureParameteri(this.colourSSAOTex.id, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GlCompat.textureParameteri(this.colourSSAOTex.id, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            if (!GlCompat.GL41) {//GL 4.3, on older versions depth stencil textures always sample the depth
+                GlCompat.textureParameteri(this.fb.getDepthTex().id, GL_TEXTURE_2D, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
+            }
         }
 
         this.initDepthStencil(viewport, sourceDepthTex, this.fb.framebuffer.id, srcWidth, srcHeight, viewport.width, viewport.height);
@@ -119,14 +122,11 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
                 float endDistance = Math.max(VoxyRenderSystem.getVanillaRenderDistance(), 20*16);//TODO: make this constant a config option
                 endDistance *= (float)Math.sqrt(3);
                 float startDelta = -start * invEndFogDelta;
-                glUniform4f(4, invEndFogDelta, startDelta, Math.max(0, Math.min(endDistance*invEndFogDelta+startDelta, 1)),0);//
-                glUniform4f(5, viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
+                glUniform4f(this.finalBlit.loc(4), invEndFogDelta, startDelta, Math.max(0, Math.min(endDistance*invEndFogDelta+startDelta, 1)),0);//
+                glUniform4f(this.finalBlit.loc(5), viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
             } else {
-                glUniform2f(4, 0, 0);
-                glUniform4f(5, 0, 0, 0, 0);
-                glUniform1i(6, 0);
-                glUniform1f(7, 0);
-                glUniform1f(8, 0);
+                glUniform4f(this.finalBlit.loc(4), 0, 0, 0, 0);
+                glUniform4f(this.finalBlit.loc(5), 0, 0, 0, 0);
             }
         }
         if (this.fogMode.hasFade) {
@@ -138,10 +138,10 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
             float end = Math.max(vanillaRd, rd);
 
             float scale = 1.0f/(end-start);
-            glUniform4f(6, MODE, (-start)*scale, scale, 0);
+            glUniform4f(this.finalBlit.loc(6), MODE, (-start)*scale, scale, 0);
         }
 
-        glBindTextureUnit(3, this.colourSSAOTex.id);
+        GlCompat.bindTextureUnit(3, this.colourSSAOTex.id);
 
         //Do alpha blending
         //Unbelievably jank hack, only blit out to the framebuffer if we are rendering fog

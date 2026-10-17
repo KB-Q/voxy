@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.rendering.util;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlFence;
 import me.cortex.voxy.client.core.gl.GlPersistentMappedBuffer;
 import me.cortex.voxy.common.Logger;
@@ -35,7 +36,8 @@ public class DownloadStream {
     private final ArrayList<DownloadData> thisFrameDownloadList = new ArrayList<>();
 
     public DownloadStream(long size) {
-        this.downloadBuffer = new GlPersistentMappedBuffer(size, GL_MAP_READ_BIT);//|GL_MAP_COHERENT_BIT
+        //The GL 4.1 backend computes everything it needs on the cpu, so there is nothing to download
+        this.downloadBuffer = GlCompat.GL41?null:new GlPersistentMappedBuffer(size, GL_MAP_READ_BIT);//|GL_MAP_COHERENT_BIT
         this.allocationArena.setLimit(size);
     }
 
@@ -58,6 +60,9 @@ public class DownloadStream {
     }
 
     public void download(GlBuffer buffer, long downloadOffset, long size, DownloadResultConsumer resultConsumer) {
+        if (this.downloadBuffer == null) {
+            throw new IllegalStateException("Download stream is not available on the GL 4.1 backend");
+        }
         if (size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException();
         }
@@ -121,6 +126,7 @@ public class DownloadStream {
     }
 
     public void tick() {
+        if (this.downloadBuffer == null) return;
         this.commit();
         if (!this.thisFrameAllocations.isEmpty()) {
             this.frames.add(new DownloadFrame(new GlFence(), new LongArrayList(this.thisFrameAllocations), new ArrayList<>(this.thisFrameDownloadList)));
@@ -150,6 +156,7 @@ public class DownloadStream {
 
     //Synchonize force flushes everything
     public void waitDiscard() {
+        if (this.downloadBuffer == null) return;
         glFinish();
         var fence = new GlFence();
         glFinish();
@@ -165,6 +172,7 @@ public class DownloadStream {
     }
 
     public void flushWaitClear() {
+        if (this.downloadBuffer == null) return;
         glFinish();
         this.tick();
         var fence = new GlFence();

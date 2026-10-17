@@ -7,6 +7,11 @@ import me.cortex.voxy.commonImpl.VoxyCommon;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
@@ -21,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.stream.Stream;
 
@@ -29,6 +35,8 @@ public final class AutotestRunner {
     private enum State { WAIT_TITLE, WAIT_WORLD, SETUP, SEED, VIEW_TELEPORT, VIEW_IDLE, VIEW_SETTLE, VIEW_SAMPLE, VIEW_OFF_SETTLE, DONE }
 
     private final Scenario scenario;
+    private final String world;
+    private final long seed;
     private final Path out;
     private final Report report = new Report();
     private final FrameStats frames = new FrameStats();
@@ -43,6 +51,8 @@ public final class AutotestRunner {
 
     public AutotestRunner(Scenario scenario, Path out) {
         this.scenario = scenario;
+        this.world = System.getProperty("voxy.autotest.world", scenario.world());
+        this.seed = Long.getLong("voxy.autotest.seed", scenario.seed());
         this.out = out;
         this.report.scenario = scenario.name();
     }
@@ -86,9 +96,15 @@ public final class AutotestRunner {
     }
 
     private void step(Minecraft mc) {
+        //A paused world stops the server (and chunk generation), so close any menu opened during the run
+        if (this.state != State.WAIT_TITLE && this.state != State.WAIT_WORLD && mc.level != null && mc.screen != null) {
+            this.report.closedScreens.add(mc.screen.getClass().getSimpleName() + " in " + this.state);
+            mc.setScreen(null);
+        }
         switch (this.state) {
             case WAIT_TITLE -> {
-                if (mc.screen instanceof TitleScreen && ++this.waitTicks > 20) {
+                //The title screen shows before resource loading finishes, wait for the loading overlay to go away
+                if (mc.screen instanceof TitleScreen && mc.getOverlay() == null && ++this.waitTicks > 20) {
                     this.report.storageBytesStart = this.voxyStorageBytes(mc);
                     this.openWorld(mc);
                     this.enter(State.WAIT_WORLD);
@@ -99,6 +115,7 @@ public final class AutotestRunner {
                     mc.options.hideGui = true;
                     this.report.voxyInstancePresent = VoxyCommon.getInstance() != null;
                     this.scenario.setupCommands().forEach(c -> mc.player.connection.sendCommand(c));
+                    this.survey(mc);
                     this.enter(State.SETUP);
                 }
             }
@@ -175,6 +192,31 @@ public final class AutotestRunner {
         }
     }
 
+    //Finds the closest position of each biome tag near the origin, used to pick interesting viewpoints
+    private void survey(Minecraft mc) {
+        var tags = this.scenario.surveyBiomeTags();
+        var server = mc.getSingleplayerServer();
+        if (tags == null || tags.isEmpty() || server == null) return;
+        server.submit(() -> {
+            var level = server.overworld();
+            for (String tag : tags) {
+                var entry = new LinkedHashMap<String, Object>();
+                entry.put("tag", tag);
+                var key = TagKey.create(Registries.BIOME, new ResourceLocation(tag));
+                var found = level.findClosestBiome3d(b -> b.is(key), new BlockPos(0, 64, 0), 1000, 32, 64);
+                if (found != null) {
+                    var pos = found.getFirst();
+                    entry.put("x", pos.getX());
+                    entry.put("z", pos.getZ());
+                    level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);//Make sure the chunk exists so the heightmap is valid
+                    entry.put("surfaceY", level.getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ()));
+                    entry.put("biome", found.getSecond().unwrapKey().map(k -> k.location().toString()).orElse("?"));
+                }
+                this.report.survey.add(entry);
+            }
+        }).join();
+    }
+
     private String currentViewName() {
         return this.scenario.viewpoints().get(this.viewIndex).name();
     }
@@ -189,12 +231,12 @@ public final class AutotestRunner {
     }
 
     private void openWorld(Minecraft mc) {
-        if (mc.getLevelSource().levelExists(this.scenario.world())) {
-            mc.createWorldOpenFlows().loadLevel(mc.screen, this.scenario.world());
+        if (mc.getLevelSource().levelExists(this.world)) {
+            mc.createWorldOpenFlows().loadLevel(mc.screen, this.world);
         } else {
-            var settings = new LevelSettings(this.scenario.world(), GameType.CREATIVE, false, Difficulty.PEACEFUL, true, new GameRules(), WorldDataConfiguration.DEFAULT);
-            var options = new WorldOptions(this.scenario.seed(), true, false);
-            mc.createWorldOpenFlows().createFreshLevel(this.scenario.world(), settings, options, WorldPresets::createNormalWorldDimensions);
+            var settings = new LevelSettings(this.world, GameType.CREATIVE, false, Difficulty.PEACEFUL, true, new GameRules(), WorldDataConfiguration.DEFAULT);
+            var options = new WorldOptions(this.seed, true, false);
+            mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options, WorldPresets::createNormalWorldDimensions);
         }
     }
 
@@ -241,7 +283,7 @@ public final class AutotestRunner {
 
     //Singleplayer worlds keep their voxy storage inside the world save
     private long voxyStorageBytes(Minecraft mc) {
-        Path dir = mc.gameDirectory.toPath().resolve("saves").resolve(this.scenario.world()).resolve("voxy");
+        Path dir = mc.gameDirectory.toPath().resolve("saves").resolve(this.world).resolve("voxy");
         if (!Files.isDirectory(dir)) return 0;
         try (Stream<Path> files = Files.walk(dir)) {
             return files.filter(Files::isRegularFile).mapToLong(p -> p.toFile().length()).sum();

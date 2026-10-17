@@ -1,14 +1,47 @@
 {
   "name": "smoke",
   "world": "voxy-autotest",
-  "seed": 20261017,
-  "setupCommands": ["gamemode spectator", "time set 6000", "weather clear"],
+  "seed": 8675309,
+  "setupCommands": [
+    "gamemode spectator",
+    "time set 6000",
+    "weather clear"
+  ],
   "seedCommands": [],
   "waitForChunky": false,
   "viewpoints": [
-    {"name": "spawn-high-north", "x": 0, "y": 200, "z": 0, "yaw": 180, "pitch": 15},
-    {"name": "spawn-high-east", "x": 0, "y": 200, "z": 0, "yaw": -90, "pitch": 15},
-    {"name": "ground-horizon", "x": 300, "y": 120, "z": 300, "yaw": 45, "pitch": 0}
+    {
+      "name": "meadow-north",
+      "x": -128,
+      "y": 150,
+      "z": 220,
+      "yaw": 180,
+      "pitch": 12
+    },
+    {
+      "name": "plateau-west",
+      "x": 220,
+      "y": 140,
+      "z": -100,
+      "yaw": 90,
+      "pitch": 8
+    },
+    {
+      "name": "taiga-east",
+      "x": 0,
+      "y": 115,
+      "z": 0,
+      "yaw": -90,
+      "pitch": 4
+    },
+    {
+      "name": "overview-high",
+      "x": 0,
+      "y": 300,
+      "z": 0,
+      "yaw": 180,
+      "pitch": 55
+    }
   ],
   "settleFrames": 120,
   "sampleFrames": 300,

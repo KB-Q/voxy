@@ -23,6 +23,8 @@ public final class Report {
     public double durationSeconds;
     public final List<Map<String, Object>> viewpoints = new ArrayList<>();
     public List<String> voxyDebug = new ArrayList<>();
+    public final List<Map<String, Object>> survey = new ArrayList<>();
+    public final List<String> closedScreens = new ArrayList<>();
 
     public Map<String, Object> addViewpoint(String name) {
         var vp = new LinkedHashMap<String, Object>();

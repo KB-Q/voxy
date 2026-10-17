@@ -10,7 +10,7 @@ import java.util.List;
 public record Scenario(String name, String world, long seed, List<String> setupCommands, List<String> seedCommands,
                        boolean waitForChunky, List<Viewpoint> viewpoints, int settleFrames, int sampleFrames,
                        int idleTimeoutSeconds, int totalTimeoutSeconds, boolean compareVoxyOff,
-                       boolean requireRenderer, double minLodCoverage) {
+                       boolean requireRenderer, double minLodCoverage, List<String> surveyBiomeTags) {
     public record Viewpoint(String name, double x, double y, double z, float yaw, float pitch) {}
 
     public static Scenario load(String name) {

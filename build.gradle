@@ -246,6 +246,8 @@ loom {
             vmArgs "-Dvoxy.autotest=true",
                     "-Dvoxy.autotest.scenario=${project.findProperty('voxy.autotest.scenario') ?: 'smoke'}",
                     "-Dvoxy.autotest.out=${project.findProperty('voxy.autotest.out') ?: 'autotest-out'}",
+                    "-Dvoxy.autotest.world=${project.findProperty('voxy.autotest.world') ?: 'voxy-autotest'}",
+                    "-Dvoxy.autotest.seed=${project.findProperty('voxy.autotest.seed') ?: '8675309'}",
                     "-Dsodium.checks.issue2561=false"
         }
     }

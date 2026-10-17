@@ -1,0 +1,17 @@
+{
+  "name": "survey",
+  "world": "voxy-autotest",
+  "seed": 8675309,
+  "setupCommands": ["gamemode spectator"],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [{"name": "overview", "x": 0, "y": 320, "z": 0, "yaw": 0, "pitch": 90}],
+  "settleFrames": 60,
+  "sampleFrames": 60,
+  "idleTimeoutSeconds": 30,
+  "totalTimeoutSeconds": 300,
+  "compareVoxyOff": false,
+  "requireRenderer": false,
+  "minLodCoverage": 0.0,
+  "surveyBiomeTags": ["minecraft:is_mountain", "minecraft:is_hill", "minecraft:is_forest", "minecraft:is_taiga", "minecraft:is_savanna", "minecraft:is_jungle", "minecraft:is_badlands", "minecraft:is_river", "minecraft:is_beach", "minecraft:is_ocean"]
+}

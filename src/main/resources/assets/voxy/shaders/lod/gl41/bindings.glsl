@@ -41,6 +41,10 @@ BlockModel getModel(uint id) {
     }
     return model;
 }
+//faceData occupies the first 6 words of the model
+uint getModelFaceData(uint id, uint face) {
+    return texelFetch(modelTex, int(id)*4 + int(face>>2u))[face&3u];
+}
 #endif
 
 #ifdef MODEL_COLOUR_BUFFER_BINDING

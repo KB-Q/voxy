@@ -43,9 +43,20 @@ public final class FrameStats {
     }
 
     public double p99Ms() {
+        return this.percentileMs(0.99);
+    }
+
+    public double percentileMs(double p) {
         if (this.deltas.isEmpty()) return 0;
         long[] sorted = this.deltas.toLongArray();
         Arrays.sort(sorted);
-        return sorted[Math.min(sorted.length - 1, (int) Math.ceil(sorted.length * 0.99) - 1)] / 1e6;
+        return sorted[Math.max(0, Math.min(sorted.length - 1, (int) Math.ceil(sorted.length * p) - 1))] / 1e6;
+    }
+
+    //Frame times in recording order, for spotting periodic stalls
+    public double[] framesMs() {
+        double[] out = new double[this.deltas.size()];
+        for (int i = 0; i < out.length; i++) out[i] = this.deltas.getLong(i) / 1e6;
+        return out;
     }
 }

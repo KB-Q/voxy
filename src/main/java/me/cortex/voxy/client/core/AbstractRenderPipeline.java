@@ -1,5 +1,7 @@
 package me.cortex.voxy.client.core;
 
+import me.cortex.voxy.common.util.JomlMem;
+
 import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.RenderStatistics;
 import me.cortex.voxy.client.TimingStatistics;
@@ -200,9 +202,9 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
         blitShader.bind();
         GlCompat.bindTextureUnit(0, srcDepthTex);
-        new Matrix4f(viewport.MVP).invert().getToAddress(SCRATCH);
+        JomlMem.put(new Matrix4f(viewport.MVP).invert(), SCRATCH);
         nglUniformMatrix4fv(blitShader.loc(1), 1, false, SCRATCH);//inverse fromProjection
-        targetTransform.getToAddress(SCRATCH);//new Matrix4f(tooProjection).mul(vp.modelView).get(data);
+        JomlMem.put(targetTransform, SCRATCH);//new Matrix4f(tooProjection).mul(vp.modelView).get(data);
         nglUniformMatrix4fv(blitShader.loc(2), 1, false, SCRATCH);//tooProjection
 
         glEnable(GL_DEPTH_TEST);

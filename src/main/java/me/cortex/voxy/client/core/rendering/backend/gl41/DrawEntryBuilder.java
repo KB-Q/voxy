@@ -25,6 +25,11 @@ public final class DrawEntryBuilder {
     private int[] translucent = new int[4*1024];
     private int translucentCount;
 
+    //Sections ordered near to far so opaque draws can reject hidden fragments with the depth test
+    private int[] sectionOrder = new int[1024];
+    private int[] sectionKeys = new int[1024];
+    private final int[] orderCounts = new int[DISTANCE_BUCKETS];
+
     public long opaqueQuads;
     public long translucentQuads;
 
@@ -43,8 +48,9 @@ public final class DrawEntryBuilder {
         this.translucentQuads = 0;
 
         int[] meta = mirror.sections;
+        this.sortNearToFar(sections, meta, camX, camY, camZ);
         for (int i = 0; i < sections.size(); i++) {
-            int base = sections.getInt(i)*8;
+            int base = this.sectionOrder[i]*8;
             int posX = meta[base];
             int posY = meta[base+1];
             int ptr = meta[base+3];
@@ -97,6 +103,36 @@ public final class DrawEntryBuilder {
         }
 
         this.sortTranslucents();
+    }
+
+    //Counting sort of the sections on the same distance metric as the translucents (in level 0 section units, clamped)
+    private void sortNearToFar(IntArrayList sections, int[] meta, int camX, int camY, int camZ) {
+        int n = sections.size();
+        if (this.sectionOrder.length < n) {
+            this.sectionOrder = new int[n*2];
+            this.sectionKeys = new int[n*2];
+        }
+        Arrays.fill(this.orderCounts, 0);
+        for (int i = 0; i < n; i++) {
+            int base = sections.getInt(i)*8;
+            int posX = meta[base], posY = meta[base+1];
+            int lod = Gl41NodeMirror.lodLevel(posX);
+            int dx = Math.abs(Gl41NodeMirror.decodeX(posY) - (camX>>lod));
+            int dy = Math.abs(Gl41NodeMirror.decodeY(posX) - (camY>>lod));
+            int dz = Math.abs(Gl41NodeMirror.decodeZ(posX, posY) - (camZ>>lod));
+            int key = Math.min((dx+dy+dz)<<lod, DISTANCE_BUCKETS-1);
+            this.sectionKeys[i] = key;
+            this.orderCounts[key]++;
+        }
+        int offset = 0;
+        for (int d = 0; d < DISTANCE_BUCKETS; d++) {
+            int c = this.orderCounts[d];
+            this.orderCounts[d] = offset;
+            offset += c;
+        }
+        for (int i = 0; i < n; i++) {
+            this.sectionOrder[this.orderCounts[this.sectionKeys[i]]++] = sections.getInt(i);
+        }
     }
 
     //Splits a range over the buckets, largest first. A bucket is only used partially filled when it is at least 3/4 full

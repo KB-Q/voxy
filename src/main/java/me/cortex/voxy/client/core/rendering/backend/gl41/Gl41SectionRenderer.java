@@ -1,5 +1,7 @@
 package me.cortex.voxy.client.core.rendering.backend.gl41;
 
+import me.cortex.voxy.common.util.JomlMem;
+
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
 import me.cortex.voxy.client.core.gl.GlBuffer;
@@ -45,6 +47,9 @@ public class Gl41SectionRenderer extends AbstractSectionRenderer<Gl41Viewport, B
     public static final Factory<Gl41Viewport, BasicSectionGeometryData> FACTORY = AbstractSectionRenderer.Factory.create(Gl41SectionRenderer.class);
 
     private static final int ENTRY_RING_SIZE = 3;
+    //Performance experiments: -Dvoxy.debug.gl41.frag=nodiscard|flat, -Dvoxy.debug.gl41.skipTerrain=true
+    private static final String DEBUG_FRAG = System.getProperty("voxy.debug.gl41.frag", "");
+    private static final boolean DEBUG_SKIP_TERRAIN = Boolean.getBoolean("voxy.debug.gl41.skipTerrain");
     private static final int ENTRY_BASE_LOCATION = 10;
 
     //Texture units, must match lod/gl41/quads.vert and lod/gl46/quads.frag. Shader pack samplers are bound from unit 6
@@ -90,6 +95,8 @@ public class Gl41SectionRenderer extends AbstractSectionRenderer<Gl41Viewport, B
         var builder = Shader.make()
                 .apply(this.properties::apply)
                 .defineIf("TAA_PATCH", taa != null)
+                .defineIf("DEBUG_NO_DISCARD", DEBUG_FRAG.equals("nodiscard"))
+                .defineIf("DEBUG_FLAT_FRAG", DEBUG_FRAG.equals("flat"))
                 .addSource(ShaderType.VERTEX, vertex);
         addDirectionalFaceTint(builder, Minecraft.getInstance().level);
 
@@ -122,16 +129,16 @@ public class Gl41SectionRenderer extends AbstractSectionRenderer<Gl41Viewport, B
 
         var mat = new Matrix4f(viewport.MVP);
         mat.translate(-viewport.innerTranslation.x, -viewport.innerTranslation.y, -viewport.innerTranslation.z);
-        mat.getToAddress(ptr); ptr += 4*4*4;
+        JomlMem.put(mat, ptr); ptr += 4*4*4;
 
-        viewport.section.getToAddress(ptr); ptr += 4*3;
+        JomlMem.put(viewport.section, ptr); ptr += 4*3;
 
         if (viewport.frameId<0) {
             Logger.error("Frame ID negative, this will cause things to break, wrapping around");
             viewport.frameId &= 0x7fffffff;
         }
         MemoryUtil.memPutInt(ptr, viewport.frameId&0x7fffffff); ptr += 4;
-        viewport.innerTranslation.getToAddress(ptr); ptr += 4*3;
+        JomlMem.put(viewport.innerTranslation, ptr); ptr += 4*3;
 
         UploadStream.INSTANCE.commit();
     }
@@ -201,7 +208,7 @@ public class Gl41SectionRenderer extends AbstractSectionRenderer<Gl41Viewport, B
 
     @Override
     public void renderTemporal(Gl41Viewport viewport) {
-        if (!this.hasEntries) return;
+        if (!this.hasEntries || DEBUG_SKIP_TERRAIN) return;
         glDisable(GL_CULL_FACE);
         glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);
@@ -224,7 +231,7 @@ public class Gl41SectionRenderer extends AbstractSectionRenderer<Gl41Viewport, B
 
     @Override
     public void renderTranslucent(Gl41Viewport viewport) {
-        if (!this.hasEntries || this.entries.getTranslucentEntryCount() == 0) return;
+        if (!this.hasEntries || this.entries.getTranslucentEntryCount() == 0 || DEBUG_SKIP_TERRAIN) return;
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         glDisable(GL_CULL_FACE);

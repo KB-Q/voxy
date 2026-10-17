@@ -1,5 +1,7 @@
 package me.cortex.voxy.client.iris;
 
+import me.cortex.voxy.common.util.JomlMem;
+
 import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -247,32 +249,32 @@ public class IrisVoxyRenderPipelineData {
         } else if (uniform instanceof Float2VectorCachedUniform v2fcu) {
             return ptr->{ptr += offset;
                 v2fcu.writeTo(ret);
-                ((Vector2f)ret.objectReturn).getToAddress(ptr);
+                JomlMem.put(((Vector2f)ret.objectReturn), ptr);
             };
         } else if (uniform instanceof Float3VectorCachedUniform v3fcu) {
             return ptr->{ptr += offset;
                 v3fcu.writeTo(ret);
-                ((Vector3f)ret.objectReturn).getToAddress(ptr);
+                JomlMem.put(((Vector3f)ret.objectReturn), ptr);
             };
         } else if (uniform instanceof Float4VectorCachedUniform v4fcu) {
             return ptr->{ptr += offset;
                 v4fcu.writeTo(ret);
-                ((Vector4f)ret.objectReturn).getToAddress(ptr);
+                JomlMem.put(((Vector4f)ret.objectReturn), ptr);
             };
         } else if (uniform instanceof Int2VectorCachedUniform v2icu) {
             return ptr->{ptr += offset;
                 v2icu.writeTo(ret);
-                ((Vector2i)ret.objectReturn).getToAddress(ptr);
+                JomlMem.put(((Vector2i)ret.objectReturn), ptr);
             };
         } else if (uniform instanceof Int3VectorCachedUniform v3icu) {
             return ptr->{ptr += offset;
                 v3icu.writeTo(ret);
-                ((Vector3i)ret.objectReturn).getToAddress(ptr);
+                JomlMem.put(((Vector3i)ret.objectReturn), ptr);
             };
         } else if (uniform instanceof Float4MatrixCachedUniform f4mcu) {
             return ptr->{ptr += offset;
                 f4mcu.writeTo(ret);
-                ((Matrix4f)ret.objectReturn).getToAddress(ptr);
+                JomlMem.put(((Matrix4f)ret.objectReturn), ptr);
             };
         } else {
             throw new IllegalStateException("Unknown uniform type " + uniform.getClass().getName());
@@ -352,7 +354,7 @@ public class IrisVoxyRenderPipelineData {
             public DynamicLocationalUniformHolder uniform3f(String name, Supplier<Vector3f> value, ValueUpdateNotifier notifier) {
                 this.injectDynamicUniformType(name, UniformType.VEC3, offset->{
                     return ptr->{
-                      value.get().getToAddress(ptr+offset);
+                      JomlMem.put(value.get(), ptr+offset);
                     };
                 });
                 return this;

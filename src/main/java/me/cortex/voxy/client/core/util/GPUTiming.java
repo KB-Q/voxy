@@ -22,7 +22,8 @@ public class GPUTiming {
     private float[] timings = new float[0];
     private String[] lables = new String[0];
 
-    private boolean enabled = false;
+    //Timestamp queries are GL 3.3, -Dvoxy.gpuTiming=true enables the per pass gpu times in the debug info
+    private boolean enabled = Boolean.getBoolean("voxy.gpuTiming");
 
     public void marker() {
         this.marker(null);
@@ -36,7 +37,7 @@ public class GPUTiming {
 
     public void setEnabled(boolean enable) {
         if (this.enabled != enable) {
-            this.enabled = enable && !me.cortex.voxy.client.core.gl.GlCompat.GL41;//timestamp query buffers need GL 4.4
+            this.enabled = enable;
         }
     }
 

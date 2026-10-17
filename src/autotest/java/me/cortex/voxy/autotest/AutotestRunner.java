@@ -3,6 +3,7 @@ package me.cortex.voxy.autotest;
 import com.mojang.blaze3d.platform.NativeImage;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
+import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRenderer;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -39,7 +40,7 @@ import java.util.stream.Stream;
 public final class AutotestRunner {
     //Must match the --width/--height program arguments of the autotest run in build.gradle
     private static final int WINDOW_WIDTH = 1280, WINDOW_HEIGHT = 720;
-    private enum State { WAIT_TITLE, WAIT_WORLD, SETUP, SEED, POST_SEED, WAIT_IMPORT, VIEW_TELEPORT, VIEW_IDLE, VIEW_SETTLE, VIEW_SAMPLE, VIEW_OFF_SETTLE, DONE }
+    private enum State { WAIT_TITLE, WAIT_WORLD, SETUP, SEED, POST_SEED, WAIT_IMPORT, VIEW_TELEPORT, VIEW_IDLE, VIEW_SETTLE, VIEW_SAMPLE, VIEW_OFF_SETTLE, VIEW_OFF_SAMPLE, DONE }
 
     private final Scenario scenario;
     private final String world;
@@ -200,6 +201,16 @@ public final class AutotestRunner {
                     vp.put("framebuffer", mc.getWindow().getWidth() + "x" + mc.getWindow().getHeight());
                     vp.put("frameTimeMeanMs", this.frames.meanMs());
                     vp.put("frameTimeP99Ms", this.frames.p99Ms());
+                    vp.put("frameTimeP50Ms", this.frames.percentileMs(0.5));
+                    vp.put("frameTimeP90Ms", this.frames.percentileMs(0.9));
+                    vp.put("frameTimeMaxMs", this.frames.percentileMs(1.0));
+                    vp.put("frameTimesMs", this.frames.framesMs());
+                    var debugVrs = IVoxyRenderSystemHolder.getNullable();
+                    if (debugVrs != null) {
+                        var lines = new ArrayList<String>();
+                        debugVrs.addDebugInfo(lines);
+                        vp.put("voxyDebug", lines);
+                    }
                     this.voxyOnImage = this.capture(mc, this.currentViewName() + ".png");
                     this.compareBaseline(vp, this.voxyOnImage, this.currentViewName());
                     if (this.scenario.compareVoxyOff()) {
@@ -212,6 +223,17 @@ public final class AutotestRunner {
             }
             case VIEW_OFF_SETTLE -> {
                 if (this.frameCounter >= this.scenario.settleFrames()) {
+                    this.frames.startRecording();
+                    this.enter(State.VIEW_OFF_SAMPLE);
+                }
+            }
+            case VIEW_OFF_SAMPLE -> {
+                //Same frame count as with voxy, the difference is the cost of voxy at this viewpoint
+                if (this.frames.recorded() >= this.scenario.sampleFrames()) {
+                    this.frames.stopRecording();
+                    var vp = this.report.viewpoints.get(this.report.viewpoints.size() - 1);
+                    vp.put("frameTimeOffMeanMs", this.frames.meanMs());
+                    vp.put("frameTimeOffP99Ms", this.frames.p99Ms());
                     NativeImage off = this.capture(mc, this.currentViewName() + "-voxyoff.png");
                     VoxyClient.AUTOTEST_SUPPRESS_RENDER = false;
                     double coverage = ImageMetrics.differingFraction(this.voxyOnImage, off, 24);
@@ -381,6 +403,12 @@ public final class AutotestRunner {
         }
         if (!this.report.voxyInstancePresent) this.report.fail("voxy instance not created");
         if (this.scenario.requireRenderer() && !this.report.voxyRendererPresent) this.report.fail("voxy renderer not created");
+        this.report.shaderPatchFallbacks = AbstractSectionRenderer.PATCH_FALLBACKS;
+        if (this.scenario.requireShaderPatch()) {
+            boolean irisPipeline = this.report.voxyDebug.stream().anyMatch(l -> l.contains("Using: IrisVoxyRenderPipeline"));
+            if (!irisPipeline) this.report.fail("voxy is not rendering through the shader pack (no IrisVoxyRenderPipeline)");
+            if (this.report.shaderPatchFallbacks != 0) this.report.fail(this.report.shaderPatchFallbacks + " shader pack patches failed to compile");
+        }
         this.report.glErrors = this.frames.glErrors;
         this.report.storageBytesEnd = this.voxyStorageBytes(mc);
         this.report.durationSeconds = (System.nanoTime() - this.startNanos) / 1e9;

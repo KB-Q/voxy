@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Runs one autotest scenario in the dev client and checks the result.
 # Usage: scripts/autotest.sh [scenario]   env: AUTOTEST_TIMEOUT (seconds, default 900), AUTOTEST_WORLD, AUTOTEST_SEED,
-#   AUTOTEST_JVM_ARGS (extra -D options for the client, space separated)
+#   AUTOTEST_JVM_ARGS (extra -D options for the client, space separated),
+#   AUTOTEST_PROD=1 (production launch of the remapped release jar instead of the dev run),
+#   AUTOTEST_JAVA (java version for the production launch, e.g. 17)
 set -uo pipefail
 SCENARIO="${1:-smoke}"
 TIMEOUT="${AUTOTEST_TIMEOUT:-900}"
@@ -11,10 +13,12 @@ OUT="$RUN_DIR/autotest/$(date +%Y%m%d-%H%M%S)-$SCENARIO"
 mkdir -p "$OUT"
 cp "$ROOT/scripts/autotest-options.txt" "$RUN_DIR/options.txt"
 
-( cd "$ROOT" && exec ./gradlew --console=plain runAutotest \
+TASK=runAutotest
+[ "${AUTOTEST_PROD:-0}" = "1" ] && TASK=runProdAutotest
+( cd "$ROOT" && exec ./gradlew --console=plain "$TASK" \
     -Pvoxy.autotest.scenario="$SCENARIO" -Pvoxy.autotest.out="$OUT" \
     -Pvoxy.autotest.world="${AUTOTEST_WORLD:-voxy-autotest}" -Pvoxy.autotest.seed="${AUTOTEST_SEED:-8675309}" \
-    ${AUTOTEST_JVM_ARGS:+-Pvoxy.autotest.jvmArgs="$AUTOTEST_JVM_ARGS"} ) > "$OUT/gradle.log" 2>&1 &
+    ${AUTOTEST_JVM_ARGS:+-Pvoxy.autotest.jvmArgs="$AUTOTEST_JVM_ARGS"} ${AUTOTEST_JAVA:+-Pvoxy.autotest.java="$AUTOTEST_JAVA"} ) > "$OUT/gradle.log" 2>&1 &
 GRADLE_PID=$!
 # The watchdog must not hold this script's stdout open, otherwise a caller piping the output waits for its sleep
 ( sleep "$TIMEOUT"; echo "autotest: timeout after ${TIMEOUT}s" >> "$OUT/gradle.log"; kill "$GRADLE_PID" 2>/dev/null; pkill -f 'voxy[.]autotest=true' ) >/dev/null 2>&1 &
@@ -29,6 +33,6 @@ grep -nE 'Exception|Mixin apply failed|FATAL|\[Render thread/ERROR\]' "$OUT/late
 STATUS=MISSING
 [ -f "$OUT/report.json" ] && STATUS="$(jq -r .status "$OUT/report.json")"
 echo "scenario: $SCENARIO  gradle-exit: $RC  status: $STATUS  out: $OUT"
-[ -f "$OUT/report.json" ] && jq -r '.failures[]?, (.viewpoints[] | "\(.name): mean \(.frameTimeMeanMs*100|floor/100)ms p99 \(.frameTimeP99Ms*100|floor/100)ms lod \(.lodCoverage // "n/a") base \(.baselineDiffFraction // "n/a")"), "glErrors: \(.glErrors) (before first frame: \(.gl.errorsBeforeFirstWorldFrame))  storage: \(.storageBytesStart) -> \(.storageBytesEnd)  instance: \(.voxyInstancePresent) renderer: \(.voxyRendererPresent)  duration: \(.durationSeconds|floor)s"' "$OUT/report.json"
+[ -f "$OUT/report.json" ] && jq -r '.failures[]?, (.viewpoints[] | "\(.name): mean \(.frameTimeMeanMs*100|floor/100)ms p99 \(.frameTimeP99Ms*100|floor/100)ms (off \(.frameTimeOffMeanMs // -1 |.*100|floor/100)/\(.frameTimeOffP99Ms // -1 |.*100|floor/100)) lod \(.lodCoverage // "n/a") base \(.baselineDiffFraction // "n/a")"), "glErrors: \(.glErrors) (before first frame: \(.gl.errorsBeforeFirstWorldFrame))  storage: \(.storageBytesStart) -> \(.storageBytesEnd)  instance: \(.voxyInstancePresent) renderer: \(.voxyRendererPresent)  duration: \(.durationSeconds|floor)s"' "$OUT/report.json"
 echo "log issues: $(wc -l < "$OUT/log-issues.txt" | tr -d ' ') (see $OUT/log-issues.txt)"
 [ "$STATUS" = "PASS" ]

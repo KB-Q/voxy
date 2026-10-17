@@ -253,17 +253,61 @@ loom {
             source sourceSets.autotest
             runDir "run-autotest"
             programArgs "--width", "1280", "--height", "720"
-            vmArgs "-Dvoxy.autotest=true",
-                    "-Dvoxy.autotest.scenario=${project.findProperty('voxy.autotest.scenario') ?: 'smoke'}",
-                    "-Dvoxy.autotest.out=${project.findProperty('voxy.autotest.out') ?: 'autotest-out'}",
-                    "-Dvoxy.autotest.world=${project.findProperty('voxy.autotest.world') ?: 'voxy-autotest'}",
-                    "-Dvoxy.autotest.seed=${project.findProperty('voxy.autotest.seed') ?: '8675309'}",
-                    "-Dsodium.checks.issue2561=false"
-            //Extra jvm arguments for experiments, e.g. -Pvoxy.autotest.jvmArgs="-Dvoxy.debug.noChunkBounds=true"
-            def extraJvmArgs = project.findProperty('voxy.autotest.jvmArgs')
-            if (extraJvmArgs) {
-                vmArgs(*extraJvmArgs.toString().trim().split(/\s+/))
-            }
+            vmArgs(*autotestJvmArgs())
         }
+    }
+}
+
+//Shared by the dev autotest run and the production autotest run
+def autotestJvmArgs() {
+    def args = ["-Dvoxy.autotest=true",
+                "-Dvoxy.autotest.scenario=${project.findProperty('voxy.autotest.scenario') ?: 'smoke'}".toString(),
+                "-Dvoxy.autotest.out=${project.findProperty('voxy.autotest.out') ?: 'autotest-out'}".toString(),
+                "-Dvoxy.autotest.world=${project.findProperty('voxy.autotest.world') ?: 'voxy-autotest'}".toString(),
+                "-Dvoxy.autotest.seed=${project.findProperty('voxy.autotest.seed') ?: '8675309'}".toString(),
+                "-Dsodium.checks.issue2561=false"]
+    //Extra jvm arguments for experiments, e.g. -Pvoxy.autotest.jvmArgs="-Dvoxy.debug.noChunkBounds=true"
+    def extraJvmArgs = project.findProperty('voxy.autotest.jvmArgs')
+    if (extraJvmArgs) {
+        args.addAll(extraJvmArgs.toString().trim().split(/\s+/))
+    }
+    return args
+}
+
+//Production autotest: the remapped release jar and the original (intermediary) mod jars in a production launch,
+// catches remapping and mixin problems the dev run cannot see
+configurations {
+    prodMods { transitive = false }
+}
+
+dependencies {
+    prodMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    prodMods "maven.modrinth:sodium:${project.sodium_version}"
+    prodMods "maven.modrinth:iris:${project.iris_version}"
+    prodMods "maven.modrinth:chunky:${project.chunky_version}"
+}
+
+def autotestJar = tasks.register('autotestJar', Jar) {
+    from sourceSets.autotest.output
+    archiveClassifier = 'autotest-dev'
+    destinationDirectory = layout.buildDirectory.dir('devlibs')
+}
+
+def remapAutotestJar = tasks.register('remapAutotestJar', net.fabricmc.loom.task.RemapJarTask) {
+    inputFile = autotestJar.flatMap { it.archiveFile }
+    archiveClassifier = 'autotest'
+    destinationDirectory = layout.buildDirectory.dir('autotestlibs')
+    addNestedDependencies = false
+}
+
+tasks.register('runProdAutotest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    mods.from(tasks.remapJar, remapAutotestJar, configurations.prodMods)
+    runDir = file('run-autotest')
+    jvmArgs.addAll(autotestJvmArgs())
+    programArgs.addAll("--width", "1280", "--height", "720")
+    //-Pvoxy.autotest.java=17 runs on the java version the vanilla 1.20.1 launcher uses
+    def javaVersion = project.findProperty('voxy.autotest.java')
+    if (javaVersion) {
+        javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(javaVersion.toString().toInteger()) }
     }
 }

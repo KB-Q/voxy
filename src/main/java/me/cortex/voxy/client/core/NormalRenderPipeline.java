@@ -37,6 +37,8 @@ import static org.lwjgl.opengl.GL45C.glBindTextureUnit;
 import static org.lwjgl.opengl.GL45C.glTextureParameterf;
 
 public class NormalRenderPipeline extends AbstractRenderPipeline {
+    //Performance experiment, the output is not valid without it
+    private static final boolean DEBUG_NO_SSAO = Boolean.getBoolean("voxy.debug.noSSAO");
     private GlTexture colourTex;
     private GlTexture colourSSAOTex;
     private final GlFramebuffer fbSSAO = new GlFramebuffer();
@@ -105,7 +107,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
     @Override
     protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceDepthTexture) {
         GPUTiming.INSTANCE.marker("ao");
-        this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceDepthTexture);
+        if (!DEBUG_NO_SSAO) this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceDepthTexture);
         glBindFramebuffer(GL_FRAMEBUFFER, this.fbSSAO.id);
     }
 

@@ -13,3 +13,4 @@ enableVsync:false
 fullscreen:false
 realmsNotifications:false
 soundCategory_master:0.0
+renderClouds:"false"

@@ -50,6 +50,7 @@
   "compareVoxyOff": true,
   "requireRenderer": true,
   "minLodCoverage": 0.05,
-  "maxBaselineDiffFraction": 0,
-  "shaderPack": "ComplementaryUnbound_r5.9.3.zip"
+  "maxBaselineDiffFraction": 0.04,
+  "shaderPack": "ComplementaryUnbound_r5.9.3.zip",
+  "requireShaderPatch": true
 }

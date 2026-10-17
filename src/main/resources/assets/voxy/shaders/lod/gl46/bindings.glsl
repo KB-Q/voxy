@@ -78,6 +78,9 @@ layout(binding = MODEL_BUFFER_BINDING, std430) readonly restrict buffer ModelBuf
 BlockModel getModel(uint id) {
     return modelData[id];
 }
+uint getModelFaceData(uint id, uint face) {
+    return modelData[id].faceData[face];
+}
 #endif
 
 #ifdef MODEL_COLOUR_BUFFER_BINDING

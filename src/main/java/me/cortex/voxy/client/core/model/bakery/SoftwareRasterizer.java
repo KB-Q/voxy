@@ -1,5 +1,7 @@
 package me.cortex.voxy.client.core.model.bakery;
 
+import me.cortex.voxy.common.util.JomlMem;
+
 import net.caffeinemc.mods.sodium.api.util.ColorMixer;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -317,8 +319,8 @@ public class SoftwareRasterizer {
 
 
     private void loadTransformPos(Matrix4f transform, long addr, int vert, Vector3f out, Vector3f otherAttributesOut) {
-        this.scratch.setFromAddress(addr+vert*ReuseVertexConsumer.VERTEX_FORMAT_SIZE);
-        otherAttributesOut.setFromAddress(addr+vert*ReuseVertexConsumer.VERTEX_FORMAT_SIZE+3*4);
+        JomlMem.get(this.scratch, addr+vert*ReuseVertexConsumer.VERTEX_FORMAT_SIZE);
+        JomlMem.get(otherAttributesOut, addr+vert*ReuseVertexConsumer.VERTEX_FORMAT_SIZE+3*4);
         this.scratch.w = 1.0f;
         var vec = transform.transformProject(this.scratch);
         if (Math.abs(this.scratch.w-1.0f)>0.000001f)

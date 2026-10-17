@@ -122,11 +122,12 @@ void setupQuad(out QuadData quad, const in Quad rawQuad, uvec2 sPos, bool genera
 
     uint face = extractFace(rawQuad);
     uint modelId = extractStateId(rawQuad);
-    BlockModel model = getModel(modelId);
-    uint faceData = model.faceData[face];
+    //Only the provoking vertex needs the whole model
+    uint faceData = getModelFaceData(modelId, face);
     ivec2 quadSize = extractSize(rawQuad);
 
     if (generateAttributes) {
+        BlockModel model = getModel(modelId);
         quad.attributeData.x = makeQuadFlags(faceData, modelId, quadSize, model, face);
         quad.attributeData.yzw = makeRemainingAttributes(model, rawQuad, lodLevel, face);
     }

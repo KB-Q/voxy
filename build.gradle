@@ -222,3 +222,31 @@ dependencies {
         minecraftRuntimeLibraries('org.xerial:sqlite-jdbc:3.49.1.0')
     }
 }
+
+//Dev only autotest harness, its own mod in its own source set so it is never part of the release jar
+sourceSets {
+    autotest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+}
+
+loom {
+    mods {
+        voxy { sourceSet sourceSets.main }
+        voxy_autotest { sourceSet sourceSets.autotest }
+    }
+    runs {
+        autotest {
+            client()
+            name = "Voxy Autotest"
+            source sourceSets.autotest
+            runDir "run-autotest"
+            programArgs "--width", "1280", "--height", "720"
+            vmArgs "-Dvoxy.autotest=true",
+                    "-Dvoxy.autotest.scenario=${project.findProperty('voxy.autotest.scenario') ?: 'smoke'}",
+                    "-Dvoxy.autotest.out=${project.findProperty('voxy.autotest.out') ?: 'autotest-out'}",
+                    "-Dsodium.checks.issue2561=false"
+        }
+    }
+}

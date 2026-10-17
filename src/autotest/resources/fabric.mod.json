@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "voxy_autotest",
+  "version": "0.0.0",
+  "name": "Voxy autotest harness (dev only)",
+  "environment": "client",
+  "entrypoints": { "client": ["me.cortex.voxy.autotest.VoxyAutotest"] },
+  "depends": { "voxy": "*", "fabric-api": "*" }
+}

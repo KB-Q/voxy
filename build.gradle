@@ -1,6 +1,5 @@
 plugins {
-    id 'fabric-loom' version "1.13-SNAPSHOT"
-    id 'maven-publish'
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 }
 
 def isInGHA = System.getenv("GITHUB_ACTIONS") == "true"
@@ -13,7 +12,6 @@ base {
 }
 
 repositories {
-    mavenLocal()
     exclusiveContent {
         forRepository {
             maven {
@@ -26,47 +24,8 @@ repositories {
         }
     }
 
-    exclusiveContent {
-        forRepository {
-            maven {
-                name "flashyreeseRepository"
-                url "https://maven.flashyreese.me/releases"
-            }
-        }
-        filter {
-            includeGroup "net.caffeinemc"
-        }
-    }
-
-
-
-    maven { url = "https://maven.shedaniel.me/" }
     maven { url = "https://maven.terraformersmc.com/releases/" }
-    maven { url = "https://repo.enonic.com/public/"}
-
-    exclusiveContent {
-        forRepository {
-            ivy {
-                name = "github"
-                url = "https://github.com/"
-                patternLayout {
-                    artifact '/[organisation]/[module]/releases/download/[revision]/[module]-[revision]-[classifier].[ext]'
-                }
-                metadataSources {
-                    artifact()
-                }
-            }
-        }
-        filter {
-            includeModuleByRegex("[^\\.]+", "nvidium")
-        }
-    }
-    maven {
-        url "https://maven.flashyreese.me/releases"
-    }
-    maven {
-        url "https://maven.flashyreese.me/snapshots"
-    }
+    mavenCentral()
 }
 
 
@@ -110,77 +69,25 @@ loom {
     }
 }
 
-def modRuntimeOnlyMsk = {arg->}
-if (!isInGHA) {
-    modRuntimeOnlyMsk = { arg ->
-        dependencies {
-            modRuntimeOnly(arg)
-        }
-    }
-}
-
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-
-    modRuntimeOnlyMsk(fabricApi.module("fabric-api-base", project.fabric_api_version))
-    modRuntimeOnlyMsk(fabricApi.module("fabric-rendering-fluids-v1", project.fabric_api_version))
-    modRuntimeOnlyMsk(fabricApi.module("fabric-resource-loader-v0", project.fabric_api_version))
-    modRuntimeOnlyMsk(fabricApi.module("fabric-command-api-v2", project.fabric_api_version))
-
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-    //TODO: this is to eventually not need sodium installed as atm its just used for parsing shaders
-    modRuntimeOnlyMsk "maven.modrinth:sodium:mc1.20.1-0.5.13-fabric"
-    modCompileOnly "maven.modrinth:sodium:mc1.20.1-0.5.13-fabric"
+    modImplementation "maven.modrinth:sodium:${project.sodium_version}"
+    modImplementation "maven.modrinth:iris:${project.iris_version}"
+    //iris needs these at runtime in the dev environment
+    modRuntimeOnly "io.github.douira:glsl-transformer:2.0.1"
+    modRuntimeOnly "org.anarres:jcpp:1.4.14"
+    modImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
+    modImplementation "maven.modrinth:chunky:${project.chunky_version}"
 
-    modImplementation("maven.modrinth:lithium:mc1.20.1-0.11.3-fabric")
-
-    // modRuntimeOnlyMsk "drouarb:nvidium:0.4.1-beta9:1.21-1.21.1@jar"
-    // modCompileOnly "drouarb:nvidium:0.4.1-beta9:1.21-1.21.1@jar"
-    modCompileOnly "maven.modrinth:nvidium:0.2.6-beta-1.20.1"
-
-    modCompileOnly("maven.modrinth:modmenu:7.2.2")
-    modRuntimeOnlyMsk("maven.modrinth:modmenu:7.2.2")
-
-    modCompileOnly("maven.modrinth:iris:1.7.6+1.20.1")
-    modRuntimeOnlyMsk("maven.modrinth:iris:1.7.6+1.20.1")
-    // iris needs these for some reason
-    modRuntimeOnlyMsk("io.github.douira:glsl-transformer:2.0.1")
-    modRuntimeOnlyMsk("org.anarres:jcpp:1.4.14")
-
-    //modCompileOnly("maven.modrinth:starlight:1.1.3+1.20.4")
-
-    //modCompileOnly("maven.modrinth:immersiveportals:v5.1.7-mc1.20.4")
-
-    modCompileOnly("maven.modrinth:sodium-extra:mc1.20.1-0.5.9")
-    modRuntimeOnlyMsk("maven.modrinth:sodium-extra:mc1.20.1-0.5.9")
-    modRuntimeOnlyMsk("net.caffeinemc:CaffeineConfig:1.3.0+1.17")
-
-    modCompileOnly("maven.modrinth:Chunky:1.3.146-fabric")
-    modRuntimeOnlyMsk("maven.modrinth:Chunky:1.3.146-fabric")
-
-    // modRuntimeOnlyMsk("maven.modrinth:spark:1.10.53-fabric")
-    modRuntimeOnlyMsk("maven.modrinth:fabric-permissions-api:0.3.1")
-    //modRuntimeOnly("maven.modrinth:nsight-loader:1.2.0")
-
-    //modImplementation('io.github.douira:glsl-transformer:2.0.1')
-
-    modCompileOnly("maven.modrinth:vivecraft:1.20.1-1.3.2-fabric")
-
-    modCompileOnly("maven.modrinth:flashback:rNCr1Rbs")
-
-    // implementation("maven.modrinth:DistantHorizonsApi:4.1.0")
-    // i know should be runtime only but BLAHHH
-    // modCompileOnly("com.seibel.distanthorizons:core:core-2.4.1-b-dev-1.20.1")
-    // modCompileOnly("com.seibel.distanthorizons:DistantHorizons:common-2.4.1-b-dev-1.20.1")
-    // modRuntimeOnlyMsk("com.seibel.distanthorizons:DistantHorizons:fabric-2.4.1-b-dev-1.20.1")
-    modCompileOnly("maven.modrinth:DistantHorizons:2.4.0-b-1.20.1")
-    modRuntimeOnlyMsk("maven.modrinth:DistantHorizons:2.4.0-b-1.20.1")
-    modRuntimeOnlyMsk("maven.modrinth:indium:1.0.36+mc1.20.1")
+    //Compile only compat
+    modCompileOnly "maven.modrinth:lithium:${project.lithium_version}"
+    modCompileOnly "maven.modrinth:flashback:${project.flashback_version}"
+    modCompileOnly "maven.modrinth:vivecraft:${project.vivecraft_version}"
 }
 
 
@@ -196,13 +103,6 @@ java {
     if (JavaVersion.current() < javaVersion) {
         toolchain.languageVersion = JavaLanguageVersion.of(21)
     }
-
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
-
-
-    //withSourcesJar()
 }
 
 sourceSets {
@@ -242,18 +142,6 @@ tasks.jar {
     }
 }
 
-publishing() {
-	publications() {
-		mavenJava(MavenPublication) {
-			from(components.java)
-		}
-	}
-
-	repositories() {
-		mavenLocal()
-	}
-}
-
 
 tasks.register('makeExcludedRocksDB', Zip) {
     archiveExtension.set("jar")
@@ -265,14 +153,15 @@ tasks.register('makeExcludedRocksDB', Zip) {
     def files = configurations.includeInternal.incoming.getArtifacts().getArtifactFiles().filter {
         it.name.startsWith('rocksdb')
     }
-    
+
     from {->zipTree(files.first())}
     archiveFileName.set(providers.provider{files.first().name})
 
+    //Keep the macOS libraries (the default storage backend is rocksdb), still drop the more exotic targets
     exclude {
         def file = it.name
         if (file.endsWith(".jnilib")) {
-            return true
+            return !(file.contains("osx-arm64") || file.contains("osx-x86_64"))
         }
         if (!file.endsWith(".so")) {
             return false
@@ -304,18 +193,13 @@ remapJar {
     if (!isInGHA) {
         def hash = gitCommitHash();
         if (!hash.equals("<UnknownCommit>")) {
-            archiveClassifier.set(hash);
+            archiveClassifier.set(hash.substring(0,7));
         }
     }
 }
 
+//Must match the lwjgl version minecraft 1.20.1 ships
 project.ext.lwjglVersion = "3.3.1"
-project.ext.lwjglNatives = "natives-windows"
-
-repositories {
-    mavenCentral()
-}
-
 
 dependencies {
     implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
@@ -323,12 +207,10 @@ dependencies {
     implementation "org.lwjgl:lwjgl"
     include(implementation "org.lwjgl:lwjgl-lmdb")
     include(implementation "org.lwjgl:lwjgl-zstd")
-    runtimeOnly "org.lwjgl:lwjgl:$lwjglVersion:natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl:$lwjglVersion:natives-linux"
-    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:natives-windows")
-    include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:natives-windows")
-    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:natives-linux")
-    include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:natives-linux")
+    for (String natives : ["natives-windows", "natives-linux", "natives-macos", "natives-macos-arm64"]) {
+        include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:$natives")
+        include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:$natives")
+    }
 
     include(implementation 'redis.clients:jedis:5.1.0')
     include(implementation('org.rocksdb:rocksdbjni:10.2.1'))
@@ -336,27 +218,7 @@ dependencies {
     include(implementation 'org.lz4:lz4-java:1.8.0')
     include(implementation('org.tukaani:xz:1.10'))
 
-    if (true) {
-        if (!isInGHA) {
-            minecraftRuntimeLibraries('org.xerial:sqlite-jdbc:3.49.1.0')
-        }
-    } else {
-        include(implementation('org.xerial:sqlite-jdbc:3.49.1.0'))
-    }
-    //implementation 'org.rocksdb:rocksdbjni:8.10.0'
-    //implementation 'redis.clients:jedis:5.1.0'
-}
-
-if (!isInGHA) {
-    repositories {
-        maven {
-            url = "https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1"
-        }
-    }
-
-    dependencies {
-        modRuntimeOnly('me.djtheredstoner:DevAuth-fabric:1.1.0') {
-            exclude group: 'net.fabricmc', module: 'fabric-loader'
-        }
+    if (!isInGHA) {
+        minecraftRuntimeLibraries('org.xerial:sqlite-jdbc:3.49.1.0')
     }
 }

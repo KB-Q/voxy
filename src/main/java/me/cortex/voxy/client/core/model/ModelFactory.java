@@ -26,9 +26,11 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.ColorResolver;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -258,7 +260,7 @@ public class ModelFactory {
 
         boolean hasDarkenedTextures = (flags&2)!=0;
         boolean isShaded = (flags&1)!=0;
-        ChunkSectionLayer layer = null;
+        RenderType layer = null;
         if (layer==null && (flags&4)!=0) {
             //we do an extra check here to be sure texture is translucent
 
@@ -269,7 +271,7 @@ public class ModelFactory {
                 if (anyTranslucent) break;
             }
             if (anyTranslucent) {
-                layer = ChunkSectionLayer.TRANSLUCENT;
+                layer = RenderType.translucent();
             } else {
                 boolean solid = true;
                 for (var face : textureData) {
@@ -277,20 +279,20 @@ public class ModelFactory {
                     if (!solid) break;
                 }
                 if (solid) {
-                    layer = ChunkSectionLayer.SOLID;
+                    layer = RenderType.solid();
                 } else {
-                    layer = ChunkSectionLayer.CUTOUT;
+                    layer = RenderType.cutout();
                 }
             }
         }
         if (layer==null && (flags&8)!=0) {
-            layer = ChunkSectionLayer.CUTOUT;
+            layer = RenderType.cutout();
         }
         if (bake.state.is(BlockTags.LEAVES)) {
-            layer = ChunkSectionLayer.SOLID;
+            layer = RenderType.solid();
         }
         if (layer == null) {
-            layer = ChunkSectionLayer.SOLID;
+            layer = RenderType.solid();
         }
 
 
@@ -705,11 +707,11 @@ public class ModelFactory {
     }
 
     private static int getBlockLightEmission(BlockState state) {
-        boolean isEmissive = state.emissiveRendering();
+        boolean isEmissive = state.emissiveRendering(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
         if (isEmissive) {
             return 15;//full bright
         }
-        return Math.clamp(state.getLightEmission(),0,15);
+        return Math.max(0, Math.min(state.getLightEmission(), 15));
     }
 
     private static final class BiomeUploadResult implements ResultUploader {

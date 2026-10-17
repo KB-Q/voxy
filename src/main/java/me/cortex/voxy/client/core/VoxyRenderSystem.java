@@ -113,7 +113,7 @@ public class VoxyRenderSystem {
         if (Minecraft.getInstance().options.renderDistance().get()<3) {
             String msg = "Voxy: Having a vanilla render distance of 2 can cause rare culling near the edge of your screen issues, please use 3 or more";
             Logger.warn(msg);
-            Minecraft.getInstance().gui.chatListener().handleSystemMessage(Component.literal(msg), false);
+            Minecraft.getInstance().gui.getChat().addMessage(Component.literal(msg));
         }
 
         //Fking HATE EVERYTHING AAAAAAAAAAAAAAAA
@@ -253,11 +253,12 @@ public class VoxyRenderSystem {
         }
 
         viewport
-                .setVanillaProjection(matrices.projection())
+                .setVanillaProjection(vanillaProjection)
                 .setProjection(voxyProjection)
-                .setModelView(new Matrix4f(matrices.modelView()))
+                .setModelView(new Matrix4f(modelView))
                 .setCamera(cameraX, cameraY, cameraZ)
                 .setScreenSize(width, height)
+                .setFogParameters(fogParameters)
                 .update();
 
         if (VoxyClient.getOcclusionDebugState()==0) {
@@ -392,11 +393,10 @@ public class VoxyRenderSystem {
             for (int i = 0; i < oldBufferBindings.length; i++) {
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
             }
-            GlStateManager._blendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
             glBlendEquation(GL_FUNC_ADD);
             GlStateManager._blendFuncSeparate(0,0, 0, 0);
             glBlendFunc(0, 0);
-            GlStateManager._disableBlend(0);
+            GlStateManager._disableBlend();
             glDisable(GL_BLEND);
             GlStateManager._depthFunc(GL_LESS);
             glDepthFunc(GL_LESS);

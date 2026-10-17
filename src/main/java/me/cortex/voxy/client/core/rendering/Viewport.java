@@ -86,6 +86,13 @@ public abstract class Viewport <A extends Viewport<A>> {
         return (A) this;
     }
 
+    public FogParameters fogParameters = FogParameters.NONE;
+
+    public A setFogParameters(FogParameters fogParameters) {
+        this.fogParameters = fogParameters;
+        return (A) this;
+    }
+
     public A setScreenSize(int width, int height) {
         this.width = width;
         this.height = height;

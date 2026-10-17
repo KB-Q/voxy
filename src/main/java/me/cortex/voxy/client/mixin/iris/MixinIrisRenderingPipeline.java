@@ -2,6 +2,7 @@ package me.cortex.voxy.client.mixin.iris;
 
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.util.IrisUtil;
+import net.minecraft.client.Minecraft;
 import me.cortex.voxy.client.iris.IGetIrisVoxyPipelineData;
 import me.cortex.voxy.client.iris.IGetVoxyPatchData;
 import me.cortex.voxy.client.iris.IrisShaderPatch;

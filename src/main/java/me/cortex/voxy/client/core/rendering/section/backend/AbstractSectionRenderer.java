@@ -10,6 +10,7 @@ import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.section.geometry.IGeometryData;
 import me.cortex.voxy.common.Logger;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.Direction;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;

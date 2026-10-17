@@ -6,6 +6,7 @@ import me.cortex.voxy.client.core.rendering.FogParameters;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import me.jellysquid.mods.sodium.client.gl.device.CommandList;
+import me.jellysquid.mods.sodium.client.gl.device.RenderDevice;
 import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 import me.jellysquid.mods.sodium.client.render.chunk.DefaultChunkRenderer;
 import me.jellysquid.mods.sodium.client.render.chunk.ShaderChunkRenderer;
@@ -24,8 +25,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = DefaultChunkRenderer.class, remap = false)
 public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
 
-    public MixinDefaultChunkRenderer(ChunkVertexType vertexType) {
-        super(vertexType);
+    public MixinDefaultChunkRenderer(RenderDevice device, ChunkVertexType vertexType) {
+        super(device, vertexType);
     }
 
     @Inject(method = "render", at = @At(value = "HEAD"), cancellable = true)

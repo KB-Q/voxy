@@ -9,6 +9,7 @@ import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -28,6 +29,17 @@ public abstract class MixinLevelRenderer implements IVoxyRenderSystemHolder {
     @Override
     public VoxyRenderSystem voxy$getRenderSystem() {
         return this.renderer;
+    }
+
+    @Inject(method = "setLevel", at = @At("HEAD"))
+    private void voxy$onSetLevel(ClientLevel level, CallbackInfo ci) {
+        this.voxy$setWorld(level);
+    }
+
+    @Inject(method = "allChanged()V", at = @At("RETURN"), order = 900)//We want to inject before sodium
+    private void voxy$reload(CallbackInfo ci) {
+        this.voxy$shutdownRenderer();
+        this.voxy$createRenderer();
     }
 
     @Inject(method = "close", at = @At("HEAD"))

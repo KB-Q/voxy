@@ -112,6 +112,9 @@ public class VoxyClient implements ClientModInitializer {
                 }}));
     }
 
+    //Set by the dev autotest harness to capture reference frames without LoDs
+    public static volatile boolean AUTOTEST_SUPPRESS_RENDER = false;
+
     public static boolean isFrexActive() {
         return !FREX.isEmpty();
     }

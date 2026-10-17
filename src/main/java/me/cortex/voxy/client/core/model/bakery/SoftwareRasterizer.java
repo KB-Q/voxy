@@ -225,6 +225,7 @@ public class SoftwareRasterizer {
         this.framebuffer[index] &= ~(1L<<39);
         this.framebuffer[index] |= ((long)(meta&4))<<37;
 
+        int srcColour = (int) this.framebuffer[index];
         this.framebuffer[index] &= ~Integer.toUnsignedLong(-1);
 
         if (this.doTheBlending) {//Blending

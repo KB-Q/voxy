@@ -22,23 +22,40 @@ public class VoxyClientInstance extends VoxyInstance {
     private final Path basePath;
     private final boolean noIngestOverride;
 
+    //The super constructor queries shouldCreateInstance, which needs the config, so it is resolved before super() runs
+    private record PreparedStorage(Path basePath, Config config, boolean noIngestOverride) {}
+    private static final ThreadLocal<PreparedStorage> CONSTRUCTING = new ThreadLocal<>();
+
     public VoxyClientInstance() {
-        {
-            var path = FlashbackCompat.getReplayStoragePath();
-            this.noIngestOverride = path != null;
-            if (path == null) {
-                path = getBasePath();
-            }
-            var basePath = this.basePath = path.normalize();
-            this.config = StorageConfigUtil.getCreateStorageConfig(Config.class, c->c.version==1&&c.sectionStorageConfig!=null, ()->DEFAULT_STORAGE_CONFIG, basePath);
-        }
+        this(prepareStorage());
+    }
+
+    private VoxyClientInstance(PreparedStorage storage) {
         super();
+        CONSTRUCTING.remove();
+        this.noIngestOverride = storage.noIngestOverride();
+        this.basePath = storage.basePath();
+        this.config = storage.config();
         this.updateDedicatedThreads();
+    }
+
+    private static PreparedStorage prepareStorage() {
+        var path = FlashbackCompat.getReplayStoragePath();
+        boolean noIngestOverride = path != null;
+        if (path == null) {
+            path = getBasePath();
+        }
+        var basePath = path.normalize();
+        var config = StorageConfigUtil.getCreateStorageConfig(Config.class, c->c.version==1&&c.sectionStorageConfig!=null, ()->DEFAULT_STORAGE_CONFIG, basePath);
+        var prepared = new PreparedStorage(basePath, config, noIngestOverride);
+        CONSTRUCTING.set(prepared);
+        return prepared;
     }
 
     @Override
     protected boolean shouldCreateInstance() {
-        return !this.config.disabled;
+        var config = this.config != null ? this.config : CONSTRUCTING.get().config();
+        return !config.disabled;
     }
 
     @Override

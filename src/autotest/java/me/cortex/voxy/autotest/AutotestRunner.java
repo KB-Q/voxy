@@ -19,7 +19,10 @@ import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import net.minecraft.world.phys.Vec3;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
+import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
 import org.popcraft.chunky.ChunkyProvider;
 
 import java.io.IOException;
@@ -28,11 +31,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 
 //Drives the client through a scenario: open world, setup, optional seeding, viewpoints, report, quit
 public final class AutotestRunner {
-    private enum State { WAIT_TITLE, WAIT_WORLD, SETUP, SEED, VIEW_TELEPORT, VIEW_IDLE, VIEW_SETTLE, VIEW_SAMPLE, VIEW_OFF_SETTLE, DONE }
+    //Must match the --width/--height program arguments of the autotest run in build.gradle
+    private static final int WINDOW_WIDTH = 1280, WINDOW_HEIGHT = 720;
+    private enum State { WAIT_TITLE, WAIT_WORLD, SETUP, SEED, POST_SEED, WAIT_IMPORT, VIEW_TELEPORT, VIEW_IDLE, VIEW_SETTLE, VIEW_SAMPLE, VIEW_OFF_SETTLE, DONE }
 
     private final Scenario scenario;
     private final String world;
@@ -46,6 +52,7 @@ public final class AutotestRunner {
     private int waitTicks;
     private long stateStartNanos = System.nanoTime();
     private int viewIndex;
+    private int postSeedIndex;
     private int frameCounter;
     private NativeImage voxyOnImage;
 
@@ -101,6 +108,13 @@ public final class AutotestRunner {
             this.report.closedScreens.add(mc.screen.getClass().getSimpleName() + " in " + this.state);
             mc.setScreen(null);
         }
+        //Mouse or keyboard input on the window must not move the camera between viewpoint captures
+        if (mc.level != null && mc.player != null) {
+            mc.mouseHandler.releaseMouse();
+            if (this.state.ordinal() > State.VIEW_TELEPORT.ordinal() && this.state != State.DONE) {
+                this.pinCamera(mc);
+            }
+        }
         switch (this.state) {
             case WAIT_TITLE -> {
                 //The title screen shows before resource loading finishes, wait for the loading overlay to go away
@@ -121,7 +135,7 @@ public final class AutotestRunner {
             }
             case SETUP -> {
                 if (this.secondsInState() > 2) {
-                    if (!this.scenario.seedCommands().isEmpty()) {
+                    if (!this.scenario.seedCommands().isEmpty() || hasPostSeedCommands()) {
                         this.scenario.seedCommands().forEach(c -> mc.player.connection.sendCommand(c));
                         this.enter(State.SEED);
                     } else {
@@ -132,6 +146,23 @@ public final class AutotestRunner {
             case SEED -> {
                 boolean running = this.scenario.waitForChunky() && ChunkyProvider.get().getApi().isRunning("minecraft:overworld");
                 if (this.secondsInState() > 5 && !running) {
+                    this.report.seedSeconds = this.secondsInState();
+                    this.postSeedIndex = 0;
+                    this.enter(hasPostSeedCommands() ? State.POST_SEED : State.VIEW_TELEPORT);
+                }
+            }
+            case POST_SEED -> {
+                if (this.secondsInState() > 3) {
+                    var commands = this.scenario.postSeedCommands();
+                    runCommand(mc, commands.get(this.postSeedIndex++));
+                    this.enter(this.postSeedIndex < commands.size() ? State.POST_SEED : State.WAIT_IMPORT);
+                }
+            }
+            case WAIT_IMPORT -> {
+                var instance = VoxyCommon.getInstance();
+                boolean importing = this.scenario.waitForImport() && instance != null && instance.getImportManager().hasActiveImports();
+                if (this.secondsInState() > 5 && !importing) {
+                    this.report.importSeconds = this.secondsInState();
                     this.enter(State.VIEW_TELEPORT);
                 }
             }
@@ -141,6 +172,7 @@ public final class AutotestRunner {
                     return;
                 }
                 var vp = this.scenario.viewpoints().get(this.viewIndex);
+                this.restoreWindowSize(mc);
                 mc.player.connection.sendCommand(String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", vp.x(), vp.y(), vp.z(), vp.yaw(), vp.pitch()));
                 this.enter(State.VIEW_IDLE);
             }
@@ -163,10 +195,11 @@ public final class AutotestRunner {
                 if (this.frames.recorded() >= this.scenario.sampleFrames()) {
                     this.frames.stopRecording();
                     var vp = this.report.addViewpoint(this.currentViewName());
+                    vp.put("framebuffer", mc.getWindow().getWidth() + "x" + mc.getWindow().getHeight());
                     vp.put("frameTimeMeanMs", this.frames.meanMs());
                     vp.put("frameTimeP99Ms", this.frames.p99Ms());
                     this.voxyOnImage = this.capture(mc, this.currentViewName() + ".png");
-                    vp.put("baselineDiff", this.baselineDiff(this.voxyOnImage, this.currentViewName()));
+                    this.compareBaseline(vp, this.voxyOnImage, this.currentViewName());
                     if (this.scenario.compareVoxyOff()) {
                         VoxyClient.AUTOTEST_SUPPRESS_RENDER = true;
                         this.enter(State.VIEW_OFF_SETTLE);
@@ -217,6 +250,50 @@ public final class AutotestRunner {
         }).join();
     }
 
+    //The teleport sets the camera once, this keeps it there (and restores it after mouse or keyboard input)
+    private void pinCamera(Minecraft mc) {
+        var vp = this.scenario.viewpoints().get(this.viewIndex);
+        var player = mc.player;
+        player.setYRot(vp.yaw());
+        player.setXRot(vp.pitch());
+        player.yRotO = vp.yaw();
+        player.xRotO = vp.pitch();
+        player.setYHeadRot(vp.yaw());
+        player.setDeltaMovement(Vec3.ZERO);
+        if (player.distanceToSqr(vp.x(), vp.y(), vp.z()) > 0.01) {
+            player.setPos(vp.x(), vp.y(), vp.z());
+        }
+    }
+
+    //Frame times and screenshots depend on the framebuffer size, undo any resize or maximise of the window
+    private void restoreWindowSize(Minecraft mc) {
+        long window = mc.getWindow().getWindow();
+        if (GLFW.glfwGetWindowAttrib(window, GLFW.GLFW_MAXIMIZED) == GLFW.GLFW_TRUE) {
+            GLFW.glfwRestoreWindow(window);
+        }
+        int[] w = new int[1], h = new int[1];
+        GLFW.glfwGetWindowSize(window, w, h);
+        if (w[0] != WINDOW_WIDTH || h[0] != WINDOW_HEIGHT) {
+            this.report.notes.add("window resized from " + w[0] + "x" + h[0] + " before " + this.currentViewNameOr("start"));
+            GLFW.glfwSetWindowSize(window, WINDOW_WIDTH, WINDOW_HEIGHT);
+        }
+    }
+
+    private String currentViewNameOr(String fallback) {
+        return this.viewIndex < this.scenario.viewpoints().size() ? this.currentViewName() : fallback;
+    }
+
+    private boolean hasPostSeedCommands() {
+        return this.scenario.postSeedCommands() != null && !this.scenario.postSeedCommands().isEmpty();
+    }
+
+    //Client side commands (e.g. /voxy) are not sent to the server, try them first
+    private static void runCommand(Minecraft mc, String command) {
+        if (!ClientCommandInternals.executeCommand(command)) {
+            mc.player.connection.sendCommand(command);
+        }
+    }
+
     private String currentViewName() {
         return this.scenario.viewpoints().get(this.viewIndex).name();
     }
@@ -251,13 +328,23 @@ public final class AutotestRunner {
         return image;
     }
 
-    private double baselineDiff(NativeImage current, String viewName) {
+    //baselineDiff: mean absolute channel difference (0-255), baselineDiffFraction: fraction of pixels with a channel
+    // differing by more than 24, both -1 without a baseline of the same size
+    private void compareBaseline(Map<String, Object> vp, NativeImage current, String viewName) {
+        vp.put("baselineDiff", -1.0);
+        vp.put("baselineDiffFraction", -1.0);
         Path baseline = this.out.getParent().resolve("baselines").resolve(this.scenario.name()).resolve(viewName + ".png");
-        if (!Files.exists(baseline)) return -1;
+        if (!Files.exists(baseline)) return;
         try (var in = Files.newInputStream(baseline); NativeImage base = NativeImage.read(in)) {
-            return ImageMetrics.meanAbsDiff(current, base);
+            if (base.getWidth() != current.getWidth() || base.getHeight() != current.getHeight()) return;
+            vp.put("baselineDiff", ImageMetrics.meanAbsDiff(current, base));
+            double fraction = ImageMetrics.differingFraction(current, base, 24);
+            vp.put("baselineDiffFraction", fraction);
+            if (this.scenario.maxBaselineDiffFraction() > 0 && fraction > this.scenario.maxBaselineDiffFraction()) {
+                this.report.fail("viewpoint " + viewName + ": baselineDiffFraction " + fraction + " > " + this.scenario.maxBaselineDiffFraction());
+            }
         } catch (IOException e) {
-            return -1;
+            this.report.notes.add("baseline read failed for " + viewName + ": " + e);
         }
     }
 

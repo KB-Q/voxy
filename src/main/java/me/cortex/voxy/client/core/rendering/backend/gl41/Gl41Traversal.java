@@ -37,6 +37,9 @@ public final class Gl41Traversal {
     private final long[] requests = new long[MAX_REQUEST_QUEUE_SIZE];
     private int requestCount;
     public int visitedNodes;
+    //Nodes that should be drawn but have no mesh yet and nothing to fall back to, these show up as holes
+    public int holeNodes;
+    public final long[] holePositions = new long[8];
 
     //Per frame parameters
     private final Matrix4f mvp = new Matrix4f();
@@ -97,6 +100,7 @@ public final class Gl41Traversal {
         this.visibleSections.clear();
         this.requestCount = 0;
         this.visitedNodes = 0;
+        this.holeNodes = 0;
 
         //Breadth first over a growable fifo, each node is visited at most once per frame
         this.queueSize = 0;
@@ -186,6 +190,9 @@ public final class Gl41Traversal {
                 renderSelf = (fx*fx+fz*fz+(16*16*16)) <= this.renderDistanceSq;//the +16^3 is buffer room
             }
             if (renderSelf) {
+                if (mesh == Gl41NodeMirror.NULL_MESH) {
+                    this.recordHole(node);
+                }
                 this.enqueueSelfForRender(node, mesh);
             }
         } else {
@@ -196,9 +203,18 @@ public final class Gl41Traversal {
                 this.addRequest(node);
                 if (lod != 0 && hasChildren) {
                     this.enqueueChildren(node, childPtr);
+                } else {
+                    this.recordHole(node);
                 }
             }
         }
+    }
+
+    private void recordHole(int node) {
+        if (this.holeNodes < this.holePositions.length) {
+            this.holePositions[this.holeNodes] = (((long)this.mirror.posX(node))<<32) | Integer.toUnsignedLong(this.mirror.posY(node));
+        }
+        this.holeNodes++;
     }
 
     private void enqueueChildren(int node, int childPtr) {

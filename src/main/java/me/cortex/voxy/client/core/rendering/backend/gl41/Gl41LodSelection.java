@@ -82,7 +82,18 @@ public final class Gl41LodSelection {
     }
 
     public void addDebug(List<String> debug) {
-        debug.add(String.format("GL41 traversal: %.2fms, TLN %d, visited %d, visible %d",
-                this.traversalNanos/1e6, this.traversal.getTopNodeCount(), this.traversal.visitedNodes, this.traversal.visibleSections.size()));
+        var t = this.traversal;
+        debug.add(String.format("GL41 traversal: %.2fms, TLN %d, visited %d, visible %d, holes %d",
+                this.traversalNanos/1e6, t.getTopNodeCount(), t.visitedNodes, t.visibleSections.size(), t.holeNodes));
+        if (t.holeNodes != 0) {
+            var sb = new StringBuilder("GL41 holes (lod x y z):");
+            for (int i = 0; i < Math.min(t.holeNodes, t.holePositions.length); i++) {
+                long p = t.holePositions[i];
+                int px = (int) (p>>>32), py = (int) p;
+                sb.append(" [").append(Gl41NodeMirror.lodLevel(px)).append(' ').append(Gl41NodeMirror.decodeX(py)).append(' ')
+                        .append(Gl41NodeMirror.decodeY(px)).append(' ').append(Gl41NodeMirror.decodeZ(px, py)).append(']');
+            }
+            debug.add(sb.toString());
+        }
     }
 }

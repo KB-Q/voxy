@@ -5,6 +5,7 @@ import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.util.IrisUtil;
+import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.world.service.VoxelIngestService;
 import me.jellysquid.mods.sodium.client.gl.device.CommandList;
 import me.jellysquid.mods.sodium.client.render.chunk.RenderSection;
@@ -19,6 +20,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.EmptyLevelChunk;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -77,9 +79,8 @@ public class MixinRenderSectionManager {
         }
     }
 
-    @Unique private long cachedChunkPos = -1;
-    @Unique private int cachedChunkStatus;
     @Unique private int bottomSectionY;
+    @Unique private static int voxy$skippedIngests;
 
     @Redirect(method = "updateSectionInfo", at = @At(value = "INVOKE", target = "Lme/jellysquid/mods/sodium/client/render/chunk/RenderSection;setInfo(Lme/jellysquid/mods/sodium/client/render/chunk/data/BuiltSectionInfo;)V"))
     private void voxy$updateOnUpload(RenderSection instance, BuiltSectionInfo info) {
@@ -103,15 +104,18 @@ public class MixinRenderSectionManager {
         //Ingest both when a section stops being built (it is about to be unloaded) and when it is first built,
         // the latter because onChunkAdded fires before lighting is available for freshly generated chunks
         var tracker = ((AccessorChunkTracker)ChunkTrackerHolder.get(this.world)).getChunkStatus();
-        //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
-        // which... could be bad ;-; or we dont ingest atall which is ok!
-        long key = ChunkPos.asLong(x, z);
-        if (key != this.cachedChunkPos) {
-            this.cachedChunkPos = key;
-            this.cachedChunkStatus = tracker.getOrDefault(key, 0);
-        }
-        if (this.cachedChunkStatus == 3) {//If this chunk still has surrounding chunks
-            var section = this.world.getChunk(x,z).getSection(y-this.bottomSectionY);
+        //The status is looked up every time, a cached value goes stale once the chunk unloads
+        if (tracker.getOrDefault(ChunkPos.asLong(x, z), 0) == 3) {//If this chunk still has surrounding chunks
+            //world.getChunk returns the all air placeholder chunk for chunks that are no longer loaded, ingesting that
+            // overwrites real lod data with air, so only ingest chunks that are actually present
+            var chunk = this.world.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
+            if (chunk == null || chunk instanceof EmptyLevelChunk) {
+                if ((voxy$skippedIngests++ & 1023) == 0) {
+                    Logger.info("Skipped section ingest for unloaded chunk " + x + "," + z + " (" + voxy$skippedIngests + " total)");
+                }
+                return;
+            }
+            var section = chunk.getSection(y-this.bottomSectionY);
             var lp = this.world.getLightEngine();
 
             var csp = SectionPos.of(x, y, z);

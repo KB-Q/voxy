@@ -49,5 +49,6 @@
   "totalTimeoutSeconds": 420,
   "compareVoxyOff": true,
   "requireRenderer": true,
-  "minLodCoverage": 0.05
+  "minLodCoverage": 0.05,
+  "maxBaselineDiffFraction": 0.008
 }

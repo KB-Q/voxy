@@ -96,6 +96,10 @@ public class ImportManager {
         }
     }
 
+    public synchronized boolean hasActiveImports() {
+        return !this.activeImporters.isEmpty();
+    }
+
     public boolean cancelImport(WorldEngine engine) {
         ImportTask task;
         synchronized (this) {

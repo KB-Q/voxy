@@ -25,6 +25,9 @@ public final class Report {
     public List<String> voxyDebug = new ArrayList<>();
     public final List<Map<String, Object>> survey = new ArrayList<>();
     public final List<String> closedScreens = new ArrayList<>();
+    public final List<String> notes = new ArrayList<>();
+    public double seedSeconds;
+    public double importSeconds;//Harness interventions, e.g. window resizes undone
 
     public Map<String, Object> addViewpoint(String name) {
         var vp = new LinkedHashMap<String, Object>();

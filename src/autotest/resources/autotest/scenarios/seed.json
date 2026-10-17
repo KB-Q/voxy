@@ -18,6 +18,11 @@
     "chunky confirm"
   ],
   "waitForChunky": true,
+  "postSeedCommands": [
+    "save-all flush",
+    "voxy import current"
+  ],
+  "waitForImport": true,
   "viewpoints": [
     {
       "name": "spawn-high",
@@ -31,7 +36,7 @@
   "settleFrames": 120,
   "sampleFrames": 120,
   "idleTimeoutSeconds": 120,
-  "totalTimeoutSeconds": 900,
+  "totalTimeoutSeconds": 1500,
   "compareVoxyOff": false,
   "requireRenderer": false,
   "minLodCoverage": 0.0

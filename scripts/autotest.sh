@@ -29,6 +29,6 @@ grep -nE 'Exception|Mixin apply failed|FATAL|\[Render thread/ERROR\]' "$OUT/late
 STATUS=MISSING
 [ -f "$OUT/report.json" ] && STATUS="$(jq -r .status "$OUT/report.json")"
 echo "scenario: $SCENARIO  gradle-exit: $RC  status: $STATUS  out: $OUT"
-[ -f "$OUT/report.json" ] && jq -r '.failures[]?, (.viewpoints[] | "\(.name): mean \(.frameTimeMeanMs*100|floor/100)ms p99 \(.frameTimeP99Ms*100|floor/100)ms lod \(.lodCoverage // "n/a") base \(.baselineDiff)"), "glErrors: \(.glErrors) (before first frame: \(.gl.errorsBeforeFirstWorldFrame))  storage: \(.storageBytesStart) -> \(.storageBytesEnd)  instance: \(.voxyInstancePresent) renderer: \(.voxyRendererPresent)  duration: \(.durationSeconds|floor)s"' "$OUT/report.json"
+[ -f "$OUT/report.json" ] && jq -r '.failures[]?, (.viewpoints[] | "\(.name): mean \(.frameTimeMeanMs*100|floor/100)ms p99 \(.frameTimeP99Ms*100|floor/100)ms lod \(.lodCoverage // "n/a") base \(.baselineDiffFraction // "n/a")"), "glErrors: \(.glErrors) (before first frame: \(.gl.errorsBeforeFirstWorldFrame))  storage: \(.storageBytesStart) -> \(.storageBytesEnd)  instance: \(.voxyInstancePresent) renderer: \(.voxyRendererPresent)  duration: \(.durationSeconds|floor)s"' "$OUT/report.json"
 echo "log issues: $(wc -l < "$OUT/log-issues.txt" | tr -d ' ') (see $OUT/log-issues.txt)"
 [ "$STATUS" = "PASS" ]

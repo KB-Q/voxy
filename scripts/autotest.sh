@@ -34,5 +34,10 @@ STATUS=MISSING
 [ -f "$OUT/report.json" ] && STATUS="$(jq -r .status "$OUT/report.json")"
 echo "scenario: $SCENARIO  gradle-exit: $RC  status: $STATUS  out: $OUT"
 [ -f "$OUT/report.json" ] && jq -r '.failures[]?, (.viewpoints[] | "\(.name): mean \(.frameTimeMeanMs*100|floor/100)ms p99 \(.frameTimeP99Ms*100|floor/100)ms (off \(.frameTimeOffMeanMs // -1 |.*100|floor/100)/\(.frameTimeOffP99Ms // -1 |.*100|floor/100)) lod \(.lodCoverage // "n/a") base \(.baselineDiffFraction // "n/a")"), "glErrors: \(.glErrors) (before first frame: \(.gl.errorsBeforeFirstWorldFrame))  storage: \(.storageBytesStart) -> \(.storageBytesEnd)  instance: \(.voxyInstancePresent) renderer: \(.voxyRendererPresent)  duration: \(.durationSeconds|floor)s"' "$OUT/report.json"
-echo "log issues: $(wc -l < "$OUT/log-issues.txt" | tr -d ' ') (see $OUT/log-issues.txt)"
-[ "$STATUS" = "PASS" ]
+# Known noise in dev and production runs: offline auth, Realms, the optional flashback mixins, shader pack uniforms
+# for newer Minecraft versions, unused shader outputs. Anything else (stack frames excluded) fails the run
+ALLOW='flashback|authentication|authlib|InvalidCredentials|MinecraftClientHttp|Realms|Unknown variable|not read by fragment shader'
+UNEXPECTED="$(grep -vE "$ALLOW" "$OUT/log-issues.txt" | grep -vE '^[0-9]+:[[:space:]]+(at |\.\.\. [0-9]+ more)' || true)"
+echo "log issues: $(wc -l < "$OUT/log-issues.txt" | tr -d ' ') (see $OUT/log-issues.txt), unexpected: $(printf '%s' "$UNEXPECTED" | grep -c . || true)"
+[ -n "$UNEXPECTED" ] && printf '%s\n' "$UNEXPECTED" | head -20 | cut -c1-240
+[ "$STATUS" = "PASS" ] && [ -z "$UNEXPECTED" ]

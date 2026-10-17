@@ -15,8 +15,11 @@ public record Scenario(String name, String world, long seed, List<String> setupC
                        boolean requireRenderer, double minLodCoverage, List<String> surveyBiomeTags,
                        double maxBaselineDiffFraction,//0 disables the baseline check
                        String shaderPack,//Iris shader pack file name in shaderpacks/, null runs without shaders
-                       boolean requireShaderPatch) {//fail unless voxy renders through the pack (IrisVoxyRenderPipeline, no patch fallback)
-    public record Viewpoint(String name, double x, double y, double z, float yaw, float pitch) {}
+                       boolean requireShaderPatch,//fail unless voxy renders through the pack (IrisVoxyRenderPipeline, no patch fallback)
+                       java.util.Map<String, String> systemProperties,//set before the world opens, e.g. voxy.geometryBufferSizeOverrideMB
+                       boolean allowBusy) {//viewpoints may be captured while voxy still has work (moving camera tests)
+    //dimension: optional, e.g. minecraft:the_nether, the teleport then goes through execute in
+    public record Viewpoint(String name, double x, double y, double z, float yaw, float pitch, String dimension) {}
 
     public static Scenario load(String name) {
         var res = Scenario.class.getResourceAsStream("/autotest/scenarios/" + name + ".json");

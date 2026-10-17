@@ -1,0 +1,139 @@
+{
+  "name": "stress",
+  "world": "voxy-autotest",
+  "seed": 8675309,
+  "setupCommands": [
+    "gamemode spectator",
+    "time set 6000",
+    "weather clear"
+  ],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [
+    {
+      "name": "flight-00",
+      "x": -700,
+      "y": 170,
+      "z": -700,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-01",
+      "x": -573,
+      "y": 170,
+      "z": -573,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-02",
+      "x": -445,
+      "y": 170,
+      "z": -445,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-03",
+      "x": -318,
+      "y": 170,
+      "z": -318,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-04",
+      "x": -191,
+      "y": 170,
+      "z": -191,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-05",
+      "x": -64,
+      "y": 170,
+      "z": -64,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-06",
+      "x": 64,
+      "y": 170,
+      "z": 64,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-07",
+      "x": 191,
+      "y": 170,
+      "z": 191,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-08",
+      "x": 318,
+      "y": 170,
+      "z": 318,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-09",
+      "x": 445,
+      "y": 170,
+      "z": 445,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-10",
+      "x": 573,
+      "y": 170,
+      "z": 573,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "flight-11",
+      "x": 700,
+      "y": 170,
+      "z": 700,
+      "yaw": -45.0,
+      "pitch": 8.0
+    },
+    {
+      "name": "nether",
+      "x": 0,
+      "y": 90,
+      "z": 0,
+      "yaw": 0.0,
+      "pitch": 10.0,
+      "dimension": "minecraft:the_nether"
+    },
+    {
+      "name": "overworld-return",
+      "x": 0,
+      "y": 220,
+      "z": 0,
+      "yaw": 180.0,
+      "pitch": 30.0,
+      "dimension": "minecraft:overworld"
+    }
+  ],
+  "settleFrames": 20,
+  "sampleFrames": 60,
+  "idleTimeoutSeconds": 3,
+  "totalTimeoutSeconds": 600,
+  "compareVoxyOff": false,
+  "requireRenderer": true,
+  "minLodCoverage": 0.0,
+  "systemProperties": {
+    "voxy.geometryBufferSizeOverrideMB": "320"
+  },
+  "allowBusy": true
+}

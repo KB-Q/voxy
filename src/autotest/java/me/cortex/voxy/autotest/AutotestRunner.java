@@ -121,6 +121,9 @@ public final class AutotestRunner {
             case WAIT_TITLE -> {
                 //The title screen shows before resource loading finishes, wait for the loading overlay to go away
                 if (mc.screen instanceof TitleScreen && mc.getOverlay() == null && ++this.waitTicks > 20) {
+                    if (this.scenario.systemProperties() != null) {
+                        this.scenario.systemProperties().forEach(System::setProperty);
+                    }
                     this.applyShaderPack();
                     this.report.storageBytesStart = this.voxyStorageBytes(mc);
                     this.openWorld(mc);
@@ -176,7 +179,8 @@ public final class AutotestRunner {
                 }
                 var vp = this.scenario.viewpoints().get(this.viewIndex);
                 this.restoreWindowSize(mc);
-                mc.player.connection.sendCommand(String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", vp.x(), vp.y(), vp.z(), vp.yaw(), vp.pitch()));
+                String tp = String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", vp.x(), vp.y(), vp.z(), vp.yaw(), vp.pitch());
+                mc.player.connection.sendCommand(vp.dimension() == null ? tp : "execute in " + vp.dimension() + " run " + tp);
                 this.enter(State.VIEW_IDLE);
             }
             case VIEW_IDLE -> {
@@ -184,7 +188,7 @@ public final class AutotestRunner {
                 this.report.voxyRendererPresent |= vrs != null;
                 boolean idle = vrs == null || vrs.isIdle();
                 if ((this.secondsInState() > 3 && idle) || this.secondsInState() > this.scenario.idleTimeoutSeconds()) {
-                    if (!idle) this.report.fail("viewpoint " + this.currentViewName() + ": voxy not idle after " + this.scenario.idleTimeoutSeconds() + "s");
+                    if (!idle && !this.scenario.allowBusy()) this.report.fail("viewpoint " + this.currentViewName() + ": voxy not idle after " + this.scenario.idleTimeoutSeconds() + "s");
                     this.enter(State.VIEW_SETTLE);
                 }
             }
@@ -278,6 +282,7 @@ public final class AutotestRunner {
     private void pinCamera(Minecraft mc) {
         var vp = this.scenario.viewpoints().get(this.viewIndex);
         var player = mc.player;
+        if (vp.dimension() != null && !mc.level.dimension().location().toString().equals(vp.dimension())) return;
         player.setYRot(vp.yaw());
         player.setXRot(vp.pitch());
         player.yRotO = vp.yaw();

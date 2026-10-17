@@ -23,12 +23,16 @@ public class VoxyClient implements ClientModInitializer {
     private static final HashSet<String> FREX = new HashSet<>();
     private static FileLock EXCLUSIVE_LOCK;
     private static boolean INSTANCE_FACTORY_SET;
-    private static boolean RENDER_BACKEND_READY;
+    private static boolean INSTANCE_ALLOWED;
+    private static boolean RENDER_SUPPORTED;
     private static boolean RENDER_BACKEND_INITIALIZED;
 
     private static VoxyClientInstance createInstance() {
-        if (!RENDER_BACKEND_READY) {
+        if (!RENDER_BACKEND_INITIALIZED) {
             Logger.error("Voxy render backend is not initialized");
+            return null;
+        }
+        if (!INSTANCE_ALLOWED) {
             return null;
         }
         return new VoxyClientInstance();
@@ -55,12 +59,14 @@ public class VoxyClient implements ClientModInitializer {
             Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
         }
 
-        boolean systemSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
-        if (!systemSupported) {
-             Logger.error("Voxy is unsupported on your system.");
+        //The instance (storage + ingest) does not need a render backend, so it is still created when rendering is unsupported
+        boolean renderSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
+        if (!renderSupported) {
+            Logger.error("Voxy rendering is unsupported on this system (no OpenGL 4.6 compute + indirect count draws), LoD data will still be ingested and stored");
         }
 
-        if (systemSupported && System.getProperty("voxy.exclusiveLock", "false").equalsIgnoreCase("true")) {
+        boolean instanceAllowed = true;
+        if (System.getProperty("voxy.exclusiveLock", "false").equalsIgnoreCase("true")) {
             //Try acquire the lock file
             var vf = Minecraft.getInstance().gameDirectory.toPath().resolve(".voxy");
             if (!vf.toFile().isDirectory()) {
@@ -72,21 +78,20 @@ public class VoxyClient implements ClientModInitializer {
             } catch (NonWritableChannelException | IOException e) {
                 //If some error write to log and unsupport
                 Logger.error("Failed to acquire exclusive voxy lock file, mod will be disabled");
-                systemSupported = false;
+                instanceAllowed = false;
             }
-
         }
 
-        if (systemSupported) {
-
+        if (instanceAllowed && renderSupported) {
             SharedIndexBuffer.INSTANCE.id();
-            RENDER_BACKEND_READY = true;
 
             if (!Capabilities.INSTANCE.subgroup) {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
             }
-
         }
+
+        INSTANCE_ALLOWED = instanceAllowed;
+        RENDER_SUPPORTED = instanceAllowed && renderSupported;
 
         if (!ExpansionUtil.isJava21()) {
             Logger.warn("Cannot use native Integer/Long compression. Using fallback...");
@@ -114,6 +119,10 @@ public class VoxyClient implements ClientModInitializer {
 
     //Set by the dev autotest harness to capture reference frames without LoDs
     public static volatile boolean AUTOTEST_SUPPRESS_RENDER = false;
+
+    public static boolean isRenderSupported() {
+        return RENDER_SUPPORTED;
+    }
 
     public static boolean isFrexActive() {
         return !FREX.isEmpty();

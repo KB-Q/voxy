@@ -64,7 +64,9 @@ public class Capabilities {
         this.canQueryGpuMemory = cap.GL_NVX_gpu_memory_info;
         //this.INT64_t = cap.GL_ARB_gpu_shader_int64 || cap.GL_AMD_gpu_shader_int64;
         //The only reliable way to test for int64 support is to try compile a shader
-        this.INT64_t = testShaderCompilesOk(ShaderType.COMPUTE, """
+        //Compute shaders and SSBOs need GL 4.3, dont query them on older contexts (e.g. macOS GL 4.1) to not generate gl errors
+        boolean gl43 = cap.OpenGL43;
+        this.INT64_t = gl43 && testShaderCompilesOk(ShaderType.COMPUTE, """
                 #version 430
                 #extension GL_ARB_gpu_shader_int64 : require
                 layout(local_size_x=32) in;
@@ -72,7 +74,7 @@ public class Capabilities {
                     uint64_t a = 1234;
                 }
                 """);
-        if (cap.GL_KHR_shader_subgroup) {
+        if (gl43 && cap.GL_KHR_shader_subgroup) {
             this.subgroup = testShaderCompilesOk(ShaderType.COMPUTE, """
                 #version 430
                 #extension GL_KHR_shader_subgroup_basic : require
@@ -86,8 +88,8 @@ public class Capabilities {
             this.subgroup = false;
         }
 
-        this.ssboMaxSize = glGetInteger64(GL_MAX_SHADER_STORAGE_BLOCK_SIZE);
-        this.ssboBindingAlignment = glGetInteger(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT);
+        this.ssboMaxSize = gl43?glGetInteger64(GL_MAX_SHADER_STORAGE_BLOCK_SIZE):0;
+        this.ssboBindingAlignment = gl43?glGetInteger(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT):16;
 
         this.isMesa = glGetString(GL_VERSION).toLowerCase(Locale.ROOT).contains("mesa");
         var vendor = glGetString(GL_VENDOR).toLowerCase(Locale.ROOT);

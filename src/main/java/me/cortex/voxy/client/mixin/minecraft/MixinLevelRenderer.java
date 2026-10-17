@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.mixin.minecraft;
 
+import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.VoxyClientInstance;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
@@ -79,6 +80,10 @@ public abstract class MixinLevelRenderer implements IVoxyRenderSystemHolder {
         }
         if (!VoxyConfig.CONFIG.isRenderingEnabled()) {
             Logger.info("Not creating renderer due to disabled rendering");
+            return;
+        }
+        if (!VoxyClient.isRenderSupported()) {
+            Logger.info("Not creating renderer, no supported render backend");
             return;
         }
         if (this.identifier == null) {

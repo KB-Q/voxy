@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core;
 
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
@@ -11,6 +12,7 @@ import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRende
 import me.cortex.voxy.client.core.rendering.util.DepthFramebuffer;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.client.iris.IrisVoxyRenderPipelineData;
+import me.cortex.voxy.client.iris.PackShaderCompat;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL30;
@@ -49,17 +51,17 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         int[] binding = new int[oDT.length];
         for (int i = 0; i < oDT.length; i++) {
             binding[i] = GL30.GL_COLOR_ATTACHMENT0+i;
-            glNamedFramebufferTexture(this.fb.framebuffer.id, GL30.GL_COLOR_ATTACHMENT0+i, oDT[i], 0);
+            this.fb.framebuffer.bind(GL30.GL_COLOR_ATTACHMENT0+i, oDT[i]);
         }
-        glNamedFramebufferDrawBuffers(this.fb.framebuffer.id, binding);
+        this.fb.framebuffer.setDrawBuffers(binding);
 
         var tDT = this.data.translucentDrawTargets;
         binding = new int[tDT.length];
         for (int i = 0; i < tDT.length; i++) {
             binding[i] = GL30.GL_COLOR_ATTACHMENT0+i;
-            glNamedFramebufferTexture(this.fbTranslucent.framebuffer.id, GL30.GL_COLOR_ATTACHMENT0+i, tDT[i], 0);
+            this.fbTranslucent.framebuffer.bind(GL30.GL_COLOR_ATTACHMENT0+i, tDT[i]);
         }
-        glNamedFramebufferDrawBuffers(this.fbTranslucent.framebuffer.id, binding);
+        this.fbTranslucent.framebuffer.setDrawBuffers(binding);
 
         this.fb.framebuffer.verify();
         this.fbTranslucent.framebuffer.verify();
@@ -77,6 +79,12 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         }
 
         this.depthBlit = new FullscreenBlit(properties, "voxy:post/blit_texture_depth_cutout.frag");
+    }
+
+    @Override
+    public void clearDepthTargets() {
+        super.clearDepthTargets();
+        this.fbTranslucent.clear(this.properties.clearDepth());
     }
 
     @Override
@@ -155,7 +163,9 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
             glColorMask(true, true, true, true);
         }
 
-        glTextureBarrier();
+        if (!GlCompat.GL41) {//GL 4.5, the blit below is ordered after the opaque draws anyway
+            glTextureBarrier();
+        }
 
         int msk = GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT;
         if (true) {//TODO: make shader specified
@@ -167,7 +177,7 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         } else {
             msk |= GL_COLOR_BUFFER_BIT;
         }
-        glBlitNamedFramebuffer(this.fb.framebuffer.id, this.fbTranslucent.framebuffer.id, 0,0, viewport.width, viewport.height, 0,0, viewport.width, viewport.height, msk, GL_NEAREST);
+        GlCompat.blitFramebuffer(this.fb.framebuffer.id, this.fbTranslucent.framebuffer.id, 0,0, viewport.width, viewport.height, 0,0, viewport.width, viewport.height, msk, GL_NEAREST);
     }
 
     @Override
@@ -267,7 +277,7 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
 
         builder.append(this.data.opaqueFragPatch());
 
-        return builder.toString();
+        return packCompat(builder.toString());
     }
 
     @Override
@@ -276,7 +286,11 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
 
         var builder = this.buildGenericShaderHeader(renderer, input);
         builder.append(this.data.translucentFragPatch());
-        return builder.toString();
+        return packCompat(builder.toString());
+    }
+
+    private static String packCompat(String src) {
+        return GlCompat.GL41 ? PackShaderCompat.fixUintBitwiseLiterals(src) : src;
     }
 
     @Override

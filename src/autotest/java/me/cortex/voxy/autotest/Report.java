@@ -26,6 +26,7 @@ public final class Report {
     public final List<Map<String, Object>> survey = new ArrayList<>();
     public final List<String> closedScreens = new ArrayList<>();
     public final List<String> notes = new ArrayList<>();
+    public String shaderPack;
     public double seedSeconds;
     public double importSeconds;//Harness interventions, e.g. window resizes undone
 

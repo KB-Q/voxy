@@ -16,6 +16,7 @@
     "iris.MixinProgramSet",
     "iris.MixinShaderPackSourceNames",
     "iris.MixinStandardMacros",
+    "iris.MixinSamplerLimits",
     "minecraft.MixinClientChunkCache",
     "minecraft.MixinClientLevel",
     "minecraft.MixinDebugScreenOverlay",

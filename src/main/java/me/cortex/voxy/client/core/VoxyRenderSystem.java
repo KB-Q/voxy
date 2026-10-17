@@ -480,6 +480,11 @@ public class VoxyRenderSystem {
         }
     }
 
+    //Used by the dev autotest harness when it captures a frame without voxy
+    public void clearForSuppressedFrame() {
+        this.pipeline.clearDepthTargets();
+    }
+
     //Used by the dev autotest harness: true when no meshing, model baking or node work is pending
     public boolean isIdle() {
         return this.renderGen.getTaskCount() == 0 && this.modelService.areQueuesEmpty() && !this.nodeManager.hasWork();

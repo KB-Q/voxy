@@ -23,6 +23,7 @@ import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
+import net.irisshaders.iris.Iris;
 import org.popcraft.chunky.ChunkyProvider;
 
 import java.io.IOException;
@@ -119,6 +120,7 @@ public final class AutotestRunner {
             case WAIT_TITLE -> {
                 //The title screen shows before resource loading finishes, wait for the loading overlay to go away
                 if (mc.screen instanceof TitleScreen && mc.getOverlay() == null && ++this.waitTicks > 20) {
+                    this.applyShaderPack();
                     this.report.storageBytesStart = this.voxyStorageBytes(mc);
                     this.openWorld(mc);
                     this.enter(State.WAIT_WORLD);
@@ -281,6 +283,25 @@ public final class AutotestRunner {
 
     private String currentViewNameOr(String fallback) {
         return this.viewIndex < this.scenario.viewpoints().size() ? this.currentViewName() : fallback;
+    }
+
+    //Every scenario sets the shader state explicitly so a previous run does not leak into it
+    private void applyShaderPack() {
+        String pack = System.getProperty("voxy.autotest.shaderPack", this.scenario.shaderPack());
+        boolean enable = pack != null && !pack.isEmpty();
+        var config = Iris.getIrisConfig();
+        boolean changed = config.areShadersEnabled() != enable || (enable && !config.getShaderPackName().orElse("").equals(pack));
+        if (changed) {
+            if (enable) config.setShaderPackName(pack);
+            config.setShadersEnabled(enable);
+            try {
+                config.save();
+                Iris.reload();
+            } catch (IOException e) {
+                this.report.fail("could not apply shader pack " + pack + ": " + e);
+            }
+        }
+        this.report.shaderPack = enable ? pack : null;
     }
 
     private boolean hasPostSeedCommands() {

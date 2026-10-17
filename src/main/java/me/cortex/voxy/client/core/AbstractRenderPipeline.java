@@ -267,6 +267,11 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
         return false;
     }
 
+    //Resets the depth targets other passes may sample (e.g. shader pack composites through vxDepthTex*)
+    public void clearDepthTargets() {
+        this.fb.clear(this.properties.clearDepth());
+    }
+
     //Binds the framebuffer and any other bindings needed for rendering
     public abstract void setupAndBindOpaque(Viewport<?> viewport);
     public abstract void setupAndBindTranslucent(Viewport<?> viewport);

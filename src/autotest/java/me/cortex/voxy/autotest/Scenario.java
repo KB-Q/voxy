@@ -13,7 +13,8 @@ public record Scenario(String name, String world, long seed, List<String> setupC
                        boolean waitForChunky, List<String> postSeedCommands, boolean waitForImport, List<Viewpoint> viewpoints, int settleFrames, int sampleFrames,
                        int idleTimeoutSeconds, int totalTimeoutSeconds, boolean compareVoxyOff,
                        boolean requireRenderer, double minLodCoverage, List<String> surveyBiomeTags,
-                       double maxBaselineDiffFraction) {//0 disables the baseline check
+                       double maxBaselineDiffFraction,//0 disables the baseline check
+                       String shaderPack) {//Iris shader pack file name in shaderpacks/, null runs without shaders
     public record Viewpoint(String name, double x, double y, double z, float yaw, float pitch) {}
 
     public static Scenario load(String name) {

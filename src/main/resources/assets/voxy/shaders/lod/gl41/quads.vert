@@ -4,8 +4,8 @@
 
 #define MODEL_BUFFER_BINDING 3
 #define MODEL_COLOUR_BUFFER_BINDING 4
-#define QUAD_BUFFER_BINDING 5
-#define DRAW_ENTRY_BINDING 6
+#define QUAD_BUFFER_BINDING 24
+#define DRAW_ENTRY_BINDING 25
 #define LIGHTING_SAMPLER_BINDING 1
 
 #import <voxy:lod/quad_format.glsl>

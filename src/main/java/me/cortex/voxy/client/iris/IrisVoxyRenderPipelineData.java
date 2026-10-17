@@ -538,7 +538,7 @@ public class IrisVoxyRenderPipelineData {
             for (int j = 0; j < samplers.length; j++) {
                 int unit = j+base;
                 var ts = samplers[j];
-                glBindTextureUnit(unit, ts.texture.getAsInt());
+                me.cortex.voxy.client.core.gl.GlCompat.bindTextureUnit(unit, ts.texture.getAsInt());
                 int sampler = ts.sampler;
                 if (sampler != -1) {
                     glBindSampler(unit, sampler);

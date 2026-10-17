@@ -47,14 +47,15 @@ public class Gl41SectionRenderer extends AbstractSectionRenderer<Gl41Viewport, B
     private static final int ENTRY_RING_SIZE = 3;
     private static final int ENTRY_BASE_LOCATION = 10;
 
-    //Texture units, must match lod/gl41/quads.vert and lod/gl46/quads.frag
+    //Texture units, must match lod/gl41/quads.vert and lod/gl46/quads.frag. Shader pack samplers are bound from unit 6
+    // upwards (IrisVoxyRenderPipeline), the quad and entry buffers are placed above that range
     private static final int ATLAS_UNIT = 0;
     private static final int LIGHTMAP_UNIT = 1;
     private static final int DEPTH_BOUND_UNIT = 2;
     private static final int MODEL_UNIT = 3;
     private static final int MODEL_COLOUR_UNIT = 4;
-    private static final int QUAD_UNIT = 5;
-    private static final int ENTRY_UNIT = 6;
+    private static final int QUAD_UNIT = 24;
+    private static final int ENTRY_UNIT = 25;
 
     private final AbstractRenderPipeline pipeline;
     private final Gl41LodSelection lodSelection;

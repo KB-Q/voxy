@@ -17,10 +17,11 @@ import static org.lwjgl.opengl.GL31C.glUniformBlockBinding;
 // are mapped to the real ones through Shader.loc
 final class Glsl410Transform {
     //layout(...) uniform <type> <name>;  (samplers, plain uniforms)
-    private static final Pattern UNIFORM_DECL = Pattern.compile("layout\\s*\\(([^)]*)\\)\\s*uniform\\s+(\\w+)\\s+(\\w+)\\s*;");
+    private static final String LAYOUT_ARGS = "((?:[^()]|\\([^()]*\\))*)";//allows one level of parentheses, e.g. binding=(BASE+1)
+    private static final Pattern UNIFORM_DECL = Pattern.compile("layout\\s*\\(" + LAYOUT_ARGS + "\\)\\s*uniform\\s+(\\w+)\\s+(\\w+)\\s*;");
     //layout(...) uniform <BlockName> {
-    private static final Pattern UNIFORM_BLOCK = Pattern.compile("layout\\s*\\(([^)]*)\\)\\s*uniform\\s+(\\w+)\\s*\\{");
-    private static final Pattern BINDING = Pattern.compile("\\bbinding\\s*=\\s*(\\w+)");
+    private static final Pattern UNIFORM_BLOCK = Pattern.compile("layout\\s*\\(" + LAYOUT_ARGS + "\\)\\s*uniform\\s+(\\w+)\\s*\\{");
+    private static final Pattern BINDING = Pattern.compile("\\bbinding\\s*=\\s*(\\w+|\\([^()]*\\))");
     private static final Pattern LOCATION = Pattern.compile("\\blocation\\s*=\\s*(\\w+)");
     private static final Pattern DEFINE = Pattern.compile("(?m)^\\s*#define\\s+(\\w+)\\s+(\\S+)\\s*$");
 
@@ -107,7 +108,18 @@ final class Glsl410Transform {
         return args.isBlank() ? "" : "layout(" + args.trim() + ") ";
     }
 
+    //A literal, a macro, or a parenthesised sum of those
     private Integer resolve(String token) {
+        token = token.trim();
+        if (token.startsWith("(") && token.endsWith(")")) {
+            int sum = 0;
+            for (String part : token.substring(1, token.length()-1).split("\\+")) {
+                Integer value = this.resolve(part);
+                if (value == null) return null;
+                sum += value;
+            }
+            return sum;
+        }
         String value = token;
         for (int depth = 0; depth < 8; depth++) {
             try {

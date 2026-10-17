@@ -46,7 +46,12 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
 
     @Unique
     private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {
-        if (VoxyClient.AUTOTEST_SUPPRESS_RENDER) return;
+        if (VoxyClient.AUTOTEST_SUPPRESS_RENDER) {
+            //Shader packs read voxy's depth targets in their own passes, empty them so the frame really has no lods
+            var renderer = renderPass == DefaultTerrainRenderPasses.CUTOUT ? IVoxyRenderSystemHolder.getNullable() : null;
+            if (renderer != null) renderer.clearForSuppressedFrame();
+            return;
+        }
         if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
             var renderer = IVoxyRenderSystemHolder.getNullable();
             if (renderer != null) {

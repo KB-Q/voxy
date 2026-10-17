@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
@@ -14,6 +15,21 @@ import org.joml.Matrix4f;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
+import static org.lwjgl.opengl.GL11C.GL_BLEND;
+import static org.lwjgl.opengl.GL11C.GL_DEPTH_COMPONENT;
+import static org.lwjgl.opengl.GL11C.GL_DEPTH_TEST;
+import static org.lwjgl.opengl.GL11C.GL_NEAREST;
+import static org.lwjgl.opengl.GL11C.GL_ONE;
+import static org.lwjgl.opengl.GL11C.GL_ONE_MINUS_SRC_ALPHA;
+import static org.lwjgl.opengl.GL11C.GL_RGBA8;
+import static org.lwjgl.opengl.GL11C.GL_SRC_ALPHA;
+import static org.lwjgl.opengl.GL11C.GL_STENCIL_TEST;
+import static org.lwjgl.opengl.GL11C.GL_TEXTURE_MAG_FILTER;
+import static org.lwjgl.opengl.GL11C.GL_TEXTURE_MIN_FILTER;
+import static org.lwjgl.opengl.GL11C.glDisable;
+import static org.lwjgl.opengl.GL11C.glEnable;
+import static org.lwjgl.opengl.GL14C.glBlendFuncSeparate;
+import static org.lwjgl.opengl.GL20C.glUniform4f;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL43.GL_DEPTH_STENCIL_TEXTURE_MODE;
 import static org.lwjgl.opengl.GL45C.glBindTextureUnit;
@@ -106,8 +122,11 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
                 glUniform4f(4, invEndFogDelta, startDelta, Math.clamp(endDistance*invEndFogDelta+startDelta, 0, 1),0);//
                 glUniform4f(5, viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
             } else {
-                glUniform4f(4, 0, 0, 0, 0);
+                glUniform2f(4, 0, 0);
                 glUniform4f(5, 0, 0, 0, 0);
+                glUniform1i(6, 0);
+                glUniform1f(7, 0);
+                glUniform1f(8, 0);
             }
         }
         if (this.fogMode.hasFade) {

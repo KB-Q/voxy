@@ -17,6 +17,8 @@ layout(location = 6) uniform vec4 fadeParams;
 
 #import <voxy:util/depthutils.glsl>
 
+#import <sodium:include/fog.glsl>
+
 out vec4 colour;
 in vec2 UV;
 

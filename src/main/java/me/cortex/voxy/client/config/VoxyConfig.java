@@ -5,10 +5,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import me.cortex.voxy.client.core.NormalRenderPipeline;
+
 import me.cortex.voxy.client.core.SSAO;
 import me.cortex.voxy.common.Logger;
-import me.cortex.voxy.common.util.cpu.CpuLayout;
 import me.cortex.voxy.commonImpl.VoxyCommon;
+import me.jellysquid.mods.sodium.client.gui.options.storage.OptionStorage;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.FileReader;
@@ -18,23 +19,28 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
-public class VoxyConfig {
+public class VoxyConfig implements OptionStorage<VoxyConfig> {
     private static final Gson GSON = new GsonBuilder()
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
             .setPrettyPrinting()
             .excludeFieldsWithModifiers(Modifier.PRIVATE)
             .create();
 
+    private static boolean LOADED_WHILE_UNAVAILABLE;
     public static VoxyConfig CONFIG = loadOrCreate();
 
     public boolean enabled = true;
     public boolean enableRendering = true;
     public boolean ingestEnabled = true;
     public float sectionRenderDistance = 16;
-    public int serviceThreads = (int) Math.max(CpuLayout.getCoreCount()/1.5, 1);
+    public int serviceThreads = (int) Math.max(Runtime.getRuntime().availableProcessors() * 2 / 1.5, 1);
     public float subDivisionSize = 64;
     public String fogMode;
+    public int skyFogDistance = 96;
+    public boolean adaptCloudDistance = true;
+    public int cloudDistance = 0;
     public boolean dontUseSodiumBuilderThreads = false;
+
     public String ssaoMode;
 
     public SSAO.SSAOMode getSSAOMode() {
@@ -87,11 +93,18 @@ public class VoxyConfig {
             var config = new VoxyConfig();
             config.save();
             return config;
-        } else {
-            var config = new VoxyConfig();
-            config.enabled = false;
-            config.enableRendering = false;
-            return config;
+        }
+        LOADED_WHILE_UNAVAILABLE = true;
+        var config = new VoxyConfig();
+        config.enabled = false;
+        config.enableRendering = false;
+        return config;
+    }
+
+    public static void reloadAfterVoxyAvailable() {
+        if (LOADED_WHILE_UNAVAILABLE && VoxyCommon.isAvailable()) {
+            LOADED_WHILE_UNAVAILABLE = false;
+            CONFIG = loadOrCreate();
         }
     }
 
@@ -112,6 +125,11 @@ public class VoxyConfig {
         return FabricLoader.getInstance()
                 .getConfigDir()
                 .resolve("voxy-config.json");
+    }
+
+    @Override
+    public VoxyConfig getData() {
+        return this;
     }
 
     public boolean isRenderingEnabled() {

@@ -42,6 +42,7 @@ public class ModelBakerySubsystem {
 
     public void tick(long totalBudget) {
         if (this.processingThreadException != null) {
+            Logger.error(this.processingThreadException.getStackTrace().toString(), this.processingThreadException);
             throw new RuntimeException(this.processingThreadException);
         }
         this.factory.processUploads();

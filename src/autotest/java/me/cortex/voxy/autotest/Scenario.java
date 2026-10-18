@@ -17,9 +17,18 @@ public record Scenario(String name, String world, long seed, List<String> setupC
                        String shaderPack,//Iris shader pack file name in shaderpacks/, null runs without shaders
                        boolean requireShaderPatch,//fail unless voxy renders through the pack (IrisVoxyRenderPipeline, no patch fallback)
                        java.util.Map<String, String> systemProperties,//set before the world opens, e.g. voxy.geometryBufferSizeOverrideMB
-                       boolean allowBusy) {//viewpoints may be captured while voxy still has work (moving camera tests)
+                       boolean allowBusy,//viewpoints may be captured while voxy still has work (moving camera tests)
+                       boolean surveyPeaks,//report the highest surface points of the pre-generated area
+                       String worldPreset) {//preset of a newly created world: null (normal) or "amplified"
     //dimension: optional, e.g. minecraft:the_nether, the teleport then goes through execute in
-    public record Viewpoint(String name, double x, double y, double z, float yaw, float pitch, String dimension) {}
+    //fov (degrees, 30-110) and renderDistance (vanilla chunks): optional, applied before the teleport and kept for later viewpoints
+    //spyglass: zoom through a held spyglass (vanilla 10x zoom, the same projection change zoom mods make), switches to creative flight
+    //aboveSurface: optional, y is replaced by the world surface height at x,z plus this offset
+    public record Viewpoint(String name, double x, double y, double z, float yaw, float pitch, String dimension, Integer fov, Integer renderDistance, boolean spyglass, Double aboveSurface) {
+        public Viewpoint withY(double newY) {
+            return new Viewpoint(this.name, this.x, newY, this.z, this.yaw, this.pitch, this.dimension, this.fov, this.renderDistance, this.spyglass, null);
+        }
+    }
 
     public static Scenario load(String name) {
         var res = Scenario.class.getResourceAsStream("/autotest/scenarios/" + name + ".json");

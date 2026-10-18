@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.mixin.sodium;
 
 import me.cortex.voxy.client.ICheekyClientChunkCache;
+import me.cortex.voxy.client.IngestStats;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
@@ -58,8 +59,12 @@ public class MixinRenderSectionManager {
             var cccm = (ICheekyClientChunkCache)this.world.getChunkSource();
             if (cccm != null) {
                 var chunk = cccm.voxy$cheekyGetChunk(x, z);
-                if (chunk != null) {
-                    VoxelIngestService.tryAutoIngestChunk(chunk);
+                if (chunk == null) {
+                    IngestStats.removeMissing++;
+                } else if (VoxelIngestService.tryAutoIngestChunk(chunk)) {
+                    IngestStats.removeOk++;
+                } else {
+                    IngestStats.removeFailed++;
                 }
             }
         }
@@ -72,8 +77,12 @@ public class MixinRenderSectionManager {
             var cccm = this.world.getChunkSource();
             if (cccm != null) {
                 var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
-                if (chunk != null) {
-                    VoxelIngestService.tryAutoIngestChunk(chunk);
+                if (chunk == null) {
+                    IngestStats.addMissing++;
+                } else if (VoxelIngestService.tryAutoIngestChunk(chunk)) {
+                    IngestStats.addOk++;
+                } else {
+                    IngestStats.addFailed++;
                 }
             }
         }
@@ -125,6 +134,7 @@ public class MixinRenderSectionManager {
             //Note: we dont do this check and just blindly ingest, it shouldbe ok :tm:
             //if (blp != null || slp != null)
             VoxelIngestService.rawIngest(vrs.getEngine(), section, x, y, z, blp == null ? null : blp.copy(), slp == null ? null : slp.copy());
+            IngestStats.sectionBuilt++;
         }
     }
 }

@@ -178,7 +178,21 @@ public final class AutotestRunner {
                     return;
                 }
                 var vp = this.scenario.viewpoints().get(this.viewIndex);
+                if (vp.aboveSurface() != null) {
+                    vp = vp.withY(this.surfaceY(mc, (int) Math.floor(vp.x()), (int) Math.floor(vp.z())) + vp.aboveSurface());
+                    this.scenario.viewpoints().set(this.viewIndex, vp);//pinCamera reads the resolved position
+                    this.report.notes.add(vp.name() + " resolved to y " + vp.y());
+                }
                 this.restoreWindowSize(mc);
+                if (vp.fov() != null) mc.options.fov().set(vp.fov());
+                if (vp.renderDistance() != null && mc.options.renderDistance().get().intValue() != vp.renderDistance()) {
+                    mc.options.renderDistance().set(vp.renderDistance());
+                }
+                if (vp.spyglass()) {
+                    mc.player.connection.sendCommand("gamemode creative");
+                    mc.player.connection.sendCommand("item replace entity @s weapon.mainhand with minecraft:spyglass");
+                }
+                mc.options.keyUse.setDown(vp.spyglass());
                 String tp = String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", vp.x(), vp.y(), vp.z(), vp.yaw(), vp.pitch());
                 mc.player.connection.sendCommand(vp.dimension() == null ? tp : "execute in " + vp.dimension() + " run " + tp);
                 this.enter(State.VIEW_IDLE);
@@ -255,6 +269,7 @@ public final class AutotestRunner {
 
     //Finds the closest position of each biome tag near the origin, used to pick interesting viewpoints
     private void survey(Minecraft mc) {
+        if (this.scenario.surveyPeaks()) this.surveyPeaks(mc);
         var tags = this.scenario.surveyBiomeTags();
         var server = mc.getSingleplayerServer();
         if (tags == null || tags.isEmpty() || server == null) return;
@@ -278,6 +293,42 @@ public final class AutotestRunner {
         }).join();
     }
 
+    private int surfaceY(Minecraft mc, int x, int z) {
+        var server = mc.getSingleplayerServer();
+        return server.submit(() -> {
+            var level = server.overworld();
+            level.getChunk(x >> 4, z >> 4);
+            return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        }).join();
+    }
+
+    //Highest surface point of each 128x128 cell of the pre-generated area (radius 1024), sampled every 16 blocks
+    private void surveyPeaks(Minecraft mc) {
+        var server = mc.getSingleplayerServer();
+        if (server == null) return;
+        server.submit(() -> {
+            var level = server.overworld();
+            for (int cx = -1024; cx < 1024; cx += 128) {
+                for (int cz = -1024; cz < 1024; cz += 128) {
+                    int bestY = Integer.MIN_VALUE, bestX = 0, bestZ = 0;
+                    for (int x = cx; x < cx + 128; x += 16) {
+                        for (int z = cz; z < cz + 128; z += 16) {
+                            level.getChunk(x >> 4, z >> 4);
+                            int y = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+                            if (y > bestY) { bestY = y; bestX = x; bestZ = z; }
+                        }
+                    }
+                    var entry = new LinkedHashMap<String, Object>();
+                    entry.put("tag", "peak");
+                    entry.put("x", bestX);
+                    entry.put("z", bestZ);
+                    entry.put("surfaceY", bestY);
+                    this.report.survey.add(entry);
+                }
+            }
+        }).join();
+    }
+
     //The teleport sets the camera once, this keeps it there (and restores it after mouse or keyboard input)
     private void pinCamera(Minecraft mc) {
         var vp = this.scenario.viewpoints().get(this.viewIndex);
@@ -289,6 +340,9 @@ public final class AutotestRunner {
         player.xRotO = vp.pitch();
         player.setYHeadRot(vp.yaw());
         player.setDeltaMovement(Vec3.ZERO);
+        if (vp.spyglass()) {
+            player.getAbilities().flying = true;
+        }
         if (player.distanceToSqr(vp.x(), vp.y(), vp.z()) > 0.01) {
             player.setPos(vp.x(), vp.y(), vp.z());
         }
@@ -361,7 +415,12 @@ public final class AutotestRunner {
         } else {
             var settings = new LevelSettings(this.world, GameType.CREATIVE, false, Difficulty.PEACEFUL, true, new GameRules(), WorldDataConfiguration.DEFAULT);
             var options = new WorldOptions(this.seed, true, false);
-            mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options, WorldPresets::createNormalWorldDimensions);
+            if ("amplified".equals(this.scenario.worldPreset())) {
+                mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options,
+                        ra -> ra.registryOrThrow(Registries.WORLD_PRESET).getHolderOrThrow(WorldPresets.AMPLIFIED).value().createWorldDimensions());
+            } else {
+                mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options, WorldPresets::createNormalWorldDimensions);
+            }
         }
     }
 

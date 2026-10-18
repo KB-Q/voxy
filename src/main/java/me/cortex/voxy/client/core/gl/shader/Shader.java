@@ -224,7 +224,19 @@ public class Shader extends TrackedObject {
             }
         }
 
+        //Debugging: -Dvoxy.debug.dumpShaders=<directory> writes the final source of every compiled shader stage
+        private static final String DUMP_DIR = System.getProperty("voxy.debug.dumpShaders");
+        private static int dumpIndex;
+
         private static int createShader(ShaderType type, String src) {
+            if (DUMP_DIR != null) {
+                try {
+                    Files.createDirectories(Path.of(DUMP_DIR));
+                    Files.writeString(Path.of(DUMP_DIR, String.format("%03d-%s.glsl", dumpIndex++, type.name())), src);
+                } catch (IOException e) {
+                    Logger.error("Shader dump failed", e);
+                }
+            }
             int shader = GL20C.glCreateShader(type.gl);
             {//https://github.com/CaffeineMC/sodium/blob/fc42a7b19836c98a35df46e63303608de0587ab6/src/main/java/net/caffeinemc/mods/sodium/client/gl/shader/ShaderWorkarounds.java
                 long ptr = MemoryUtil.memAddress(MemoryUtil.memUTF8(src, true));

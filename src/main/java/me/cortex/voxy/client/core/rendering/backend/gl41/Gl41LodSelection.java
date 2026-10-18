@@ -85,6 +85,12 @@ public final class Gl41LodSelection {
         var t = this.traversal;
         debug.add(String.format("GL41 traversal: %.2fms, TLN %d, visited %d, visible %d, holes %d",
                 this.traversalNanos/1e6, t.getTopNodeCount(), t.visitedNodes, t.visibleSections.size(), t.holeNodes));
+        int[] perLod = new int[16];
+        for (int i = 0; i < t.visibleSections.size(); i++) {
+            perLod[Gl41NodeMirror.lodLevel(this.mirror.sectionPosX(t.visibleSections.getInt(i)))]++;
+        }
+        debug.add(String.format("GL41 visible per lod [0-4]: %d/%d/%d/%d/%d, requests %d",
+                perLod[0], perLod[1], perLod[2], perLod[3], perLod[4], t.lastRequestCount));
         if (t.holeNodes != 0) {
             var sb = new StringBuilder("GL41 holes (lod x y z):");
             for (int i = 0; i < Math.min(t.holeNodes, t.holePositions.length); i++) {

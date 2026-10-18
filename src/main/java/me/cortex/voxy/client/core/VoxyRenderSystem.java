@@ -578,6 +578,7 @@ public class VoxyRenderSystem {
             this.renderGen.addDebugData(debug);
             this.nodeManager.addDebug(debug);
             this.pipeline.addDebug(debug);
+            debug.add(me.cortex.voxy.client.IngestStats.line());
         }
         {
             TimingStatistics.update();

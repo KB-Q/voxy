@@ -1,0 +1,24 @@
+{
+  "name": "detail",
+  "world": "voxy-autotest",
+  "seed": 8675309,
+  "setupCommands": ["gamemode spectator", "time set 6000", "weather clear"],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [
+    {"name": "hill-below-lod", "x": -224, "y": 75, "z": -40, "yaw": 180, "pitch": -12, "fov": 70, "renderDistance": 2},
+    {"name": "grass-close-lod", "x": -128, "y": 140, "z": -128, "yaw": 0, "pitch": 55, "renderDistance": 2},
+    {"name": "zoom-far-70", "x": 400, "y": 120, "z": -100, "yaw": 97, "pitch": 3, "renderDistance": 8},
+    {"name": "zoom-far-30", "x": 400, "y": 120, "z": -100, "yaw": 97, "pitch": 3, "fov": 30},
+    {"name": "zoom-far-70-again", "x": 400, "y": 120, "z": -100, "yaw": 97, "pitch": 3, "fov": 70},
+    {"name": "hill-below-vanilla", "x": -224, "y": 75, "z": -40, "yaw": 180, "pitch": -12, "renderDistance": 12},
+    {"name": "grass-close-vanilla", "x": -128, "y": 140, "z": -128, "yaw": 0, "pitch": 55}
+  ],
+  "settleFrames": 600,
+  "sampleFrames": 120,
+  "idleTimeoutSeconds": 90,
+  "totalTimeoutSeconds": 600,
+  "compareVoxyOff": true,
+  "requireRenderer": true,
+  "minLodCoverage": 0.0
+}

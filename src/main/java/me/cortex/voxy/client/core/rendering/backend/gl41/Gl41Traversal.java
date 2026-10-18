@@ -37,6 +37,7 @@ public final class Gl41Traversal {
     private final long[] requests = new long[MAX_REQUEST_QUEUE_SIZE];
     private int requestCount;
     public int visitedNodes;
+    public int lastRequestCount;
     //Nodes that should be drawn but have no mesh yet and nothing to fall back to, these show up as holes
     public int holeNodes;
     public final long[] holePositions = new long[8];
@@ -111,6 +112,7 @@ public final class Gl41Traversal {
             this.visit(this.queue[head]);
         }
 
+        this.lastRequestCount = this.requestCount;
         if (this.requestCount != 0) {
             var batch = new MemoryBuffer(this.requestCount*8L+8);
             MemoryUtil.memPutInt(batch.address, this.requestCount);

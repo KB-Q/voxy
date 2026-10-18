@@ -126,6 +126,9 @@ void setupQuad(out QuadData quad, const in Quad rawQuad, uvec2 sPos, bool genera
     uint faceData = getModelFaceData(modelId, face);
     ivec2 quadSize = extractSize(rawQuad);
 
+    //Only the provoking vertex computes the attributes, the others must still be defined: left undefined, the macOS
+    // shader compiler miscompiles the shader pack (PATCHED_SHADER) variant and drops quads, leaving see-through terrain
+    quad.attributeData = uvec4(0);
     if (generateAttributes) {
         BlockModel model = getModel(modelId);
         quad.attributeData.x = makeQuadFlags(faceData, modelId, quadSize, model, face);

@@ -1,0 +1,23 @@
+{
+  "name": "ingest",
+  "world": "voxy-ingest",
+  "seed": 8675309,
+  "setupCommands": ["gamemode spectator", "time set 6000", "weather clear"],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [
+    {"name": "path-0", "x": -600, "y": 150, "z": -100, "yaw": -90, "pitch": 10, "fov": 70, "renderDistance": 8},
+    {"name": "path-1", "x": -400, "y": 150, "z": -100, "yaw": -90, "pitch": 10},
+    {"name": "path-2", "x": -200, "y": 150, "z": -100, "yaw": -90, "pitch": 10},
+    {"name": "path-3", "x": 0, "y": 150, "z": -100, "yaw": -90, "pitch": 10},
+    {"name": "path-4", "x": 200, "y": 150, "z": -100, "yaw": -90, "pitch": 10},
+    {"name": "look-back", "x": 420, "y": 170, "z": -100, "yaw": 90, "pitch": 12}
+  ],
+  "settleFrames": 600,
+  "sampleFrames": 60,
+  "idleTimeoutSeconds": 60,
+  "totalTimeoutSeconds": 600,
+  "compareVoxyOff": true,
+  "requireRenderer": true,
+  "minLodCoverage": 0.0
+}

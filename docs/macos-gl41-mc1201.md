@@ -57,10 +57,10 @@ Mean frame time in milliseconds, Voxy on / Voxy off, production jar on Java 17:
 
 | Viewpoint | No shaders | Complementary Unbound | LoD coverage, no shaders / shaders |
 |---|---|---|---|
-| meadow-north (-128, 150, 220) | 12.2 / 1.0 | 23.5 / 11.0 | 0.37 / 0.34 |
-| plateau-west (220, 140, -100) | 12.0 / 0.9 | 22.9 / 11.0 | 0.44 / 0.39 |
-| taiga-east (0, 115, 0) | 10.7 / 0.9 | 21.5 / 11.8 | 0.27 / 0.18 |
-| overview-high (0, 300, 0) | 9.8 / 0.8 | 24.1 / 8.4 | 1.00 / 0.59 |
+| meadow-north (-128, 150, 220) | 12.2 / 1.0 | 24.0 / 10.9 | 0.37 / 0.34 |
+| plateau-west (220, 140, -100) | 12.0 / 0.9 | 24.1 / 10.9 | 0.44 / 0.41 |
+| taiga-east (0, 115, 0) | 10.7 / 0.9 | 22.7 / 11.6 | 0.27 / 0.20 |
+| overview-high (0, 300, 0) | 9.8 / 0.8 | 24.2 / 8.3 | 1.00 / 0.58 |
 
 - LoD coverage is lower with the shader pack because its atmospheric haze brings distant terrain close to the sky colour, so fewer pixels cross the difference threshold.
 
@@ -84,8 +84,11 @@ Mean frame time in milliseconds, Voxy on / Voxy off, production jar on Java 17:
 | `scripts/autotest.sh smoke` | dev launch, fixed viewpoints, exits non-zero on failure |
 | `scripts/autotest.sh smoke-shaders` | same with the shader pack in `run-autotest/shaderpacks/` |
 | `scripts/autotest.sh stress` | eviction, movement and dimension change |
+| `scripts/autotest.sh zoom` | the same far viewpoint at FOV 70 and through a spyglass (10x zoom); the F3 line "GL41 visible per lod" shows the detail levels drawn |
+| `AUTOTEST_WORLD=<new name> scripts/autotest.sh amplified` | creates an amplified world, fills it by flying over it (client ingest only), compares LoD and vanilla views from below the mountains |
+| `AUTOTEST_WORLD=<same name> scripts/autotest.sh amplified-shaders` | the same views with the shader pack |
 | `AUTOTEST_PROD=1 AUTOTEST_JAVA=17 scripts/autotest.sh smoke` | production launch of the release jar on Java 17 |
 | `./gradlew test` | unit tests |
 
 - Each run writes `report.json`, screenshots and the game log to `run-autotest/autotest/<timestamp>-<scenario>/`. Baselines are read from `run-autotest/autotest/baselines/<scenario>/`.
-- `AUTOTEST_JVM_ARGS` passes extra `-D` options, for example `-Dvoxy.debug.gl41.frag=flat` or `-Dvoxy.debug.noChunkBounds=true` for experiments.
+- `AUTOTEST_JVM_ARGS` passes extra `-D` options, for example `-Dvoxy.debug.gl41.frag=flat`, `-Dvoxy.debug.noChunkBounds=true`, `-Dvoxy.debug.noPatch=true` (ignore shader pack LoD patches) or `-Dvoxy.debug.dumpShaders=<dir>` (write every compiled shader source).

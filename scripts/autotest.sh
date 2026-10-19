@@ -3,7 +3,7 @@
 # Usage: scripts/autotest.sh [scenario]   env: AUTOTEST_TIMEOUT (seconds, default 900), AUTOTEST_WORLD, AUTOTEST_SEED,
 #   AUTOTEST_JVM_ARGS (extra -D options for the client, space separated),
 #   AUTOTEST_PROD=1 (production launch of the remapped release jar instead of the dev run),
-#   AUTOTEST_JAVA (java version for the production launch, e.g. 17)
+#   AUTOTEST_JAVA (java version for the production launch, e.g. 17), AUTOTEST_CHUNKSMITH=1 (dev run with Chunksmith instead of Chunky)
 set -uo pipefail
 SCENARIO="${1:-smoke}"
 TIMEOUT="${AUTOTEST_TIMEOUT:-900}"
@@ -18,7 +18,7 @@ TASK=runAutotest
 ( cd "$ROOT" && exec ./gradlew --console=plain "$TASK" \
     -Pvoxy.autotest.scenario="$SCENARIO" -Pvoxy.autotest.out="$OUT" \
     -Pvoxy.autotest.world="${AUTOTEST_WORLD:-voxy-autotest}" -Pvoxy.autotest.seed="${AUTOTEST_SEED:-8675309}" \
-    ${AUTOTEST_JVM_ARGS:+-Pvoxy.autotest.jvmArgs="$AUTOTEST_JVM_ARGS"} ${AUTOTEST_JAVA:+-Pvoxy.autotest.java="$AUTOTEST_JAVA"} ) > "$OUT/gradle.log" 2>&1 &
+    ${AUTOTEST_JVM_ARGS:+-Pvoxy.autotest.jvmArgs="$AUTOTEST_JVM_ARGS"} ${AUTOTEST_JAVA:+-Pvoxy.autotest.java="$AUTOTEST_JAVA"} ${AUTOTEST_CHUNKSMITH:+-Pvoxy.autotest.chunksmith=true} ) > "$OUT/gradle.log" 2>&1 &
 GRADLE_PID=$!
 # The watchdog must not hold this script's stdout open, otherwise a caller piping the output waits for its sleep
 ( sleep "$TIMEOUT"; echo "autotest: timeout after ${TIMEOUT}s" >> "$OUT/gradle.log"; kill "$GRADLE_PID" 2>/dev/null; pkill -f 'voxy[.]autotest=true' ) >/dev/null 2>&1 &

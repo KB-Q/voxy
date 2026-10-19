@@ -1,0 +1,38 @@
+{
+  "name": "pregen-chunksmith",
+  "world": "voxy-chunksmith",
+  "seed": 8675309,
+  "setupCommands": [
+    "gamemode spectator",
+    "time set 6000",
+    "weather clear"
+  ],
+  "seedCommands": [
+    "cs world minecraft:overworld",
+    "cs center -3000 0",
+    "cs radius 256",
+    "cs start",
+    "cs confirm"
+  ],
+  "waitForChunky": false,
+  "seedWaitSeconds": 90,
+  "viewpoints": [
+    {
+      "name": "far-view",
+      "x": -3000,
+      "y": 220,
+      "z": -900,
+      "yaw": 0,
+      "pitch": 12,
+      "fov": 70,
+      "renderDistance": 8
+    }
+  ],
+  "settleFrames": 600,
+  "sampleFrames": 60,
+  "idleTimeoutSeconds": 90,
+  "totalTimeoutSeconds": 900,
+  "compareVoxyOff": true,
+  "requireRenderer": true,
+  "minLodCoverage": 0.05
+}

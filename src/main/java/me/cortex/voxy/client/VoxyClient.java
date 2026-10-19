@@ -104,6 +104,8 @@ public class VoxyClient implements ClientModInitializer {
     public void onInitializeClient() {
         setInstanceFactory();
 
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(AutoWorldImport::tick);
+
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             if (VoxyCommon.isAvailable()) {
                 dispatcher.register(VoxyCommands.register());

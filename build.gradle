@@ -82,7 +82,14 @@ dependencies {
     modRuntimeOnly "io.github.douira:glsl-transformer:2.0.1"
     modRuntimeOnly "org.anarres:jcpp:1.4.14"
     modImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
-    modImplementation "maven.modrinth:chunky:${project.chunky_version}"
+    //Pregenerators for the autotest scenarios (voxy itself does not depend on either), -Pvoxy.autotest.chunksmith=true
+    // swaps Chunky for Chunksmith in the dev run
+    modCompileOnly "maven.modrinth:chunky:${project.chunky_version}"
+    if (project.hasProperty("voxy.autotest.chunksmith")) {
+        modRuntimeOnly "maven.modrinth:chunksmith:${project.chunksmith_version}"
+    } else {
+        modRuntimeOnly "maven.modrinth:chunky:${project.chunky_version}"
+    }
 
     //Compile only compat
     modCompileOnly "maven.modrinth:lithium:${project.lithium_version}"

@@ -151,7 +151,7 @@ public final class AutotestRunner {
             }
             case SEED -> {
                 boolean running = this.scenario.waitForChunky() && ChunkyProvider.get().getApi().isRunning("minecraft:overworld");
-                if (this.secondsInState() > 5 && !running) {
+                if (this.secondsInState() > Math.max(5, this.scenario.seedWaitSeconds()) && !running) {
                     this.report.seedSeconds = this.secondsInState();
                     this.postSeedIndex = 0;
                     this.enter(hasPostSeedCommands() ? State.POST_SEED : State.VIEW_TELEPORT);

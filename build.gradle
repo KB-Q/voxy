@@ -193,9 +193,7 @@ remapJar {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
 
-    doFirst {
-        delete fileTree(getDestinationDirectory().get())
-    }
+    //Previous jars are kept, the commit hash classifier keeps their names apart
 
     if (!isInGHA) {
         def hash = gitCommitHash();

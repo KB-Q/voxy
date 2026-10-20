@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
 
 public class ShaderLoader {
     public static String parse(String id) {
-        var src =  "#version 460 core\n";
+        //macOS only exposes GLSL 4.10
+        var src = me.cortex.voxy.client.core.gl.GlCompat.GL41 ? "#version 410 core\n" : "#version 460 core\n";
         src += String.join("\n", ShaderLoadingParser.parseRoot(Identifier.parse(id)));
         return src;
     }

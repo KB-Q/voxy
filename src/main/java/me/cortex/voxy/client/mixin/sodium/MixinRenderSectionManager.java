@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.mixin.sodium;
 
 import me.cortex.voxy.client.ICheekyClientChunkCache;
+import me.cortex.voxy.client.IngestStats;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IGetVoxyRenderSystem;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
@@ -18,6 +19,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.chunk.EmptyLevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -55,8 +57,12 @@ public class MixinRenderSectionManager {
             var cccm = (ICheekyClientChunkCache)this.level.getChunkSource();
             if (cccm != null) {
                 var chunk = cccm.voxy$cheekyGetChunk(x, z);
-                if (chunk != null) {
-                    VoxelIngestService.tryAutoIngestChunk(chunk);
+                if (chunk == null) {
+                    IngestStats.removeMissing++;
+                } else if (VoxelIngestService.tryAutoIngestChunk(chunk)) {
+                    IngestStats.removeOk++;
+                } else {
+                    IngestStats.removeFailed++;
                 }
             }
         }
@@ -69,8 +75,12 @@ public class MixinRenderSectionManager {
             var cccm = this.level.getChunkSource();
             if (cccm != null) {
                 var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
-                if (chunk != null) {
-                    VoxelIngestService.tryAutoIngestChunk(chunk);
+                if (chunk == null) {
+                    IngestStats.addMissing++;
+                } else if (VoxelIngestService.tryAutoIngestChunk(chunk)) {
+                    IngestStats.addOk++;
+                } else {
+                    IngestStats.addFailed++;
                 }
             }
         }
@@ -87,8 +97,6 @@ public class MixinRenderSectionManager {
         }
     }*/
 
-    @Unique private long cachedChunkPos = -1;
-    @Unique private int cachedChunkStatus;
     @Unique private int bottomSectionY;
 
     @Redirect(method = "updateSectionInfo", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSection;setInfo(Lnet/caffeinemc/mods/sodium/client/render/chunk/data/BuiltSectionInfo;)Z"))
@@ -114,20 +122,15 @@ public class MixinRenderSectionManager {
 
         if (wasBuilt && VoxyConfig.CONFIG.ingestEnabled) {
             var tracker = ((AccessorChunkTracker)ChunkTrackerHolder.get(this.level)).getChunkStatus();
-            //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
-            // which... could be bad ;-; or we dont ingest atall which is ok!
-            long key = ChunkPos.asLong(x, z);
-            if (key != this.cachedChunkPos) {
-                this.cachedChunkPos = key;
-                this.cachedChunkStatus = tracker.getOrDefault(key, 0);
-            }
-            if (this.cachedChunkStatus == 3) {//If this chunk still has surrounding chunks
+            //The status is looked up every time, a cached value goes stale once the chunk unloads
+            if (tracker.getOrDefault(ChunkPos.asLong(x, z), 0) == 3) {//If this chunk still has surrounding chunks
                 var cccm = this.level.getChunkSource();
                 //var chunk = ((ICheekyClientChunkCache)cccm).voxy$cheekyGetChunk(x, z);
                 //Dont thinks need to use cheekyGetChunk here as thats handled by the inject into head of onChunkRemoved
                 // but only ingest if the chunkstatus is full and exists
                 var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
-                if (chunk != null) {
+                //An unloaded chunk can come back as the all air placeholder, ingesting it would overwrite real lod data with air
+                if (chunk != null && !(chunk instanceof EmptyLevelChunk)) {
                     var section = chunk.getSection(y - this.bottomSectionY);
                     var lp = this.level.getLightEngine();
 
@@ -138,6 +141,7 @@ public class MixinRenderSectionManager {
                     //Note: we dont do this check and just blindly ingest, it shouldbe ok :tm:
                     //if (blp != null || slp != null)
                         VoxelIngestService.rawIngest(system.getEngine(), section, x, y, z, blp == null ? null : blp.copy(), slp == null ? null : slp.copy());
+                    IngestStats.sectionBuilt++;
                 }
             }
         }

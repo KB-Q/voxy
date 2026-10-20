@@ -24,7 +24,7 @@ public class GlTexture extends TrackedObject {
     }
 
     public GlTexture(int type) {
-        this.id = glCreateTextures(type);
+        this.id = GlCompat.GL41?glGenTextures():glCreateTextures(type);
         this.type = type;
         COUNT++;
     }
@@ -47,7 +47,14 @@ public class GlTexture extends TrackedObject {
 
         this.format = format;
         if (this.type == GL_TEXTURE_2D) {
-            glTextureStorage2D(this.id, levels, format, width, height);
+            if (GlCompat.GL41) {
+                int prev = glGetInteger(GL_TEXTURE_BINDING_2D);
+                glBindTexture(GL_TEXTURE_2D, this.id);
+                org.lwjgl.opengl.ARBTextureStorage.glTexStorage2D(GL_TEXTURE_2D, levels, format, width, height);
+                glBindTexture(GL_TEXTURE_2D, prev);
+            } else {
+                glTextureStorage2D(this.id, levels, format, width, height);
+            }
             this.width = width;
             this.height = height;
             this.levels = levels;
@@ -60,6 +67,9 @@ public class GlTexture extends TrackedObject {
 
     public GlTexture createView() {
         this.assertAllocated();
+        if (GlCompat.GL41) {
+            throw new UnsupportedOperationException("Texture views are not available on the GL 4.1 backend");
+        }
         var view = new GlTexture(this.type, true);
         glTextureView(view.id, this.type, this.id, this.format, 0, 1, 0, 1);
         return view;
@@ -148,10 +158,45 @@ public class GlTexture extends TrackedObject {
             case GL_DEPTH32F_STENCIL8 -> GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
             default -> throw new IllegalStateException("Unknown format");
         };
+        if (GlCompat.GL41) {
+            this.zero41(type);
+            return this;
+        }
         for (int lvl = 0; lvl < this.levels; lvl++) {
             nglClearTexImage(this.id, lvl, this.getPixelTransferFormat(), type, 0);
         }
         return this;
+    }
+
+    //No clear texture on GL 4.1: upload zeros, in row strips so large textures (the model atlas is 12288x8192) do not need a
+    // full size cpu buffer. The transfer type decides how many bytes the driver reads per pixel, RGBA8 uses unsigned bytes
+    private void zero41(int type) {
+        if (this.format == GL_RGBA8) {
+            type = GL_UNSIGNED_BYTE;
+        }
+        int bytesPerPixel = switch (this.format) {
+            case GL_RG16F, GL_DEPTH32F_STENCIL8 -> 8;
+            default -> 4;
+        };
+        final long STRIP_BYTES = 16L<<20;
+        int rows = (int) Math.max(1, Math.min(this.height, STRIP_BYTES/((long)this.width*bytesPerPixel)));
+        long scratch = org.lwjgl.system.MemoryUtil.nmemCalloc(1, (long)this.width*rows*bytesPerPixel);
+        int prev = glGetInteger(GL_TEXTURE_BINDING_2D);
+        glBindTexture(GL_TEXTURE_2D, this.id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+        glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+        for (int lvl = 0; lvl < this.levels; lvl++) {
+            int w = Math.max(1, this.width>>lvl);
+            int h = Math.max(1, this.height>>lvl);
+            for (int y = 0; y < h; y += rows) {
+                nglTexSubImage2D(GL_TEXTURE_2D, lvl, 0, y, w, Math.min(rows, h - y), this.getPixelTransferFormat(), type, scratch);
+            }
+        }
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glBindTexture(GL_TEXTURE_2D, prev);
+        org.lwjgl.system.MemoryUtil.nmemFree(scratch);
     }
 
     public static int getCount() {

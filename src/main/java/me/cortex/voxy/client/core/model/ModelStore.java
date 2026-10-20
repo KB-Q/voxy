@@ -1,8 +1,10 @@
 package me.cortex.voxy.client.core.model;
 
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.RenderResourceReuse;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
+import me.cortex.voxy.client.core.gl.GlTextureBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.resources.Identifier;
@@ -13,6 +15,8 @@ import static org.lwjgl.opengl.GL11C.GL_NEAREST_MIPMAP_LINEAR;
 import static org.lwjgl.opengl.GL12C.GL_TEXTURE_MAX_LOD;
 import static org.lwjgl.opengl.GL12C.GL_TEXTURE_MIN_LOD;
 import static org.lwjgl.opengl.GL30.glBindBufferBase;
+import static org.lwjgl.opengl.GL30C.GL_R32UI;
+import static org.lwjgl.opengl.GL30C.GL_RGBA32UI;
 import static org.lwjgl.opengl.GL33.*;
 import static org.lwjgl.opengl.GL33C.glSamplerParameteri;
 import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BUFFER;
@@ -23,11 +27,21 @@ public class ModelStore {
     final GlBuffer modelBuffer;
     final GlBuffer modelColourBuffer;
     final GlTexture textures;
+    //GL 4.1: texture buffer views since there are no SSBOs, a model is 4 RGBA32UI texels
+    private final GlTextureBuffer modelTextureBuffer;
+    private final GlTextureBuffer modelColourTextureBuffer;
     public final int blockSampler = glGenSamplers();
 
     public ModelStore() {
         this.modelBuffer = new GlBuffer(MODEL_SIZE * (1<<16)).name("ModelData");
         this.modelColourBuffer = new GlBuffer(4 * (1<<16)).name("ModelColour");
+        if (GlCompat.GL41) {
+            this.modelTextureBuffer = new GlTextureBuffer(this.modelBuffer, GL_RGBA32UI);
+            this.modelColourTextureBuffer = new GlTextureBuffer(this.modelColourBuffer, GL_R32UI);
+        } else {
+            this.modelTextureBuffer = null;
+            this.modelColourTextureBuffer = null;
+        }
         this.textures = RenderResourceReuse.getOrCreateModelStoreTextureAtlas();
 
         //Limit the mips of the texture to match that of the terrain atlas
@@ -43,6 +57,10 @@ public class ModelStore {
 
 
     public void free() {
+        if (this.modelTextureBuffer != null) {
+            this.modelTextureBuffer.free();
+            this.modelColourTextureBuffer.free();
+        }
         this.modelBuffer.free();
         this.modelColourBuffer.free();
         RenderResourceReuse.giveBackModelStoreTextureAtlas(this.textures);
@@ -50,10 +68,16 @@ public class ModelStore {
     }
 
 
+    //On GL 4.1 the model and colour indices are texture units instead of SSBO bindings
     public void bind(int modelBindingIndex, int colourBindingIndex, int textureBindingIndex) {
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, modelBindingIndex, this.modelBuffer.id);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, colourBindingIndex, this.modelColourBuffer.id);
-        glBindTextureUnit(textureBindingIndex, this.textures.id);
+        if (GlCompat.GL41) {
+            this.modelTextureBuffer.bind(modelBindingIndex);
+            this.modelColourTextureBuffer.bind(colourBindingIndex);
+        } else {
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, modelBindingIndex, this.modelBuffer.id);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, colourBindingIndex, this.modelColourBuffer.id);
+        }
+        GlCompat.bindTextureUnit(textureBindingIndex, this.textures.id);
         glBindSampler(textureBindingIndex, this.blockSampler);
     }
 }

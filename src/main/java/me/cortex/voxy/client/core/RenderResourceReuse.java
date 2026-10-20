@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core;
 
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.model.ModelFactory;
 import me.cortex.voxy.client.core.rendering.section.geometry.BasicSectionGeometryData;
@@ -102,6 +103,13 @@ public class RenderResourceReuse {
     }
 
     private static long getGeometryBufferSize() {
+        var override = System.getProperty("voxy.geometryBufferSizeOverrideMB", "");
+        if (GlCompat.GL41) {
+            //The terrain shader reads quads through an RG32UI texture buffer (8 bytes per texel), so the buffer is capped by the
+            // texture buffer size, 1 GiB by default (unified memory on Apple silicon, no way to query free memory)
+            long capacity = override.isEmpty() ? 1L<<30 : Long.parseLong(override)*1024L*1024L;
+            return Math.min(capacity, Capabilities.INSTANCE.maxTextureBufferSize*8L) & ~7L;
+        }
         long geometryCapacity = Math.min((1L<<(64-Long.numberOfLeadingZeros(Capabilities.INSTANCE.ssboMaxSize-1)))<<1, 1L<<32)-1024/*(1L<<32)-1024*/;
         if (Capabilities.INSTANCE.isIntel) {
             geometryCapacity = Math.max(geometryCapacity, 1L<<30);//intel moment, force min 1gb
@@ -123,7 +131,6 @@ public class RenderResourceReuse {
         }
         //geometryCapacity = 1<<28;
         //geometryCapacity = 1<<30;//1GB test
-        var override = System.getProperty("voxy.geometryBufferSizeOverrideMB", "");
         if (!override.isEmpty()) {
             geometryCapacity = Long.parseLong(override)*1024L*1024L;
         }

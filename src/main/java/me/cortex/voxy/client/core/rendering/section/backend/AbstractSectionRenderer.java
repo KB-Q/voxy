@@ -89,7 +89,14 @@ public abstract class AbstractSectionRenderer <T extends Viewport<T>, J extends 
         }*/
     }
 
+    //Shader pack patches that failed to compile and fell back to the normal shader (read by the dev autotest harness)
+    public static volatile int PATCH_FALLBACKS = 0;
+
+    //Debugging: -Dvoxy.debug.noPatch=true compiles the unpatched terrain shaders even when a shader pack provides patches
+    private static final boolean DEBUG_NO_PATCH = Boolean.getBoolean("voxy.debug.noPatch");
+
     protected static Shader tryCompilePatchedOrNormal(Shader.Builder<?> builder, String shader, String original) {
+        if (DEBUG_NO_PATCH) shader = original;
         boolean patched = shader != original;//This is the correct comparison type (reference)
         try {
             return builder.clone()
@@ -99,6 +106,7 @@ public abstract class AbstractSectionRenderer <T extends Viewport<T>, J extends 
         } catch (RuntimeException e) {
             if (patched) {
                 Logger.error("Failed to compile shader patch, using normal pipeline to prevent errors", e);
+                PATCH_FALLBACKS++;
                 return tryCompilePatchedOrNormal(builder, original, original);
             } else {
                 throw e;

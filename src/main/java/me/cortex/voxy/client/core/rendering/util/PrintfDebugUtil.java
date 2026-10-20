@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class PrintfDebugUtil {
-    public static final boolean ENABLE_PRINTF_DEBUGGING = System.getProperty("voxy.enableShaderDebugPrintf", "false").equals("true");
+    public static final boolean ENABLE_PRINTF_DEBUGGING = System.getProperty("voxy.enableShaderDebugPrintf", "false").equals("true") && !me.cortex.voxy.client.core.gl.GlCompat.GL41;//needs SSBOs
 
     private static final List<String> printfQueue2 = new ArrayList<>();
     private static final List<String> printfQueue = new ArrayList<>();

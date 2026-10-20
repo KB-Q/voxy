@@ -1,0 +1,33 @@
+{
+  "name": "amplified",
+  "world": "voxy-amplified",
+  "worldPreset": "amplified",
+  "seed": 8675309,
+  "setupCommands": ["gamemode spectator", "time set 6000", "weather clear"],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [
+    {"name": "fly-0", "x": 0, "y": 320, "z": 0, "yaw": -90, "pitch": 30, "fov": 70, "renderDistance": 8},
+    {"name": "fly-1", "x": 200, "y": 320, "z": 0, "yaw": -90, "pitch": 30},
+    {"name": "fly-2", "x": 400, "y": 320, "z": 0, "yaw": -90, "pitch": 30},
+    {"name": "fly-3", "x": 400, "y": 320, "z": 200, "yaw": 0, "pitch": 30},
+    {"name": "fly-4", "x": 200, "y": 320, "z": 200, "yaw": 90, "pitch": 30},
+    {"name": "fly-5", "x": 0, "y": 320, "z": 200, "yaw": 90, "pitch": 30},
+    {"name": "low-a-lod", "x": 100, "y": 0, "z": 100, "aboveSurface": 3, "yaw": -90, "pitch": -15, "renderDistance": 3},
+    {"name": "low-b-lod", "x": 300, "y": 0, "z": 100, "aboveSurface": 3, "yaw": 90, "pitch": -15},
+    {"name": "low-c-lod", "x": 200, "y": 0, "z": 100, "aboveSurface": 3, "yaw": 180, "pitch": -15},
+    {"name": "low-d-lod", "x": 200, "y": 0, "z": 100, "aboveSurface": 3, "yaw": 0, "pitch": -15},
+    {"name": "low-a-vanilla", "x": 100, "y": 0, "z": 100, "aboveSurface": 3, "yaw": -90, "pitch": -15, "renderDistance": 16},
+    {"name": "low-b-vanilla", "x": 300, "y": 0, "z": 100, "aboveSurface": 3, "yaw": 90, "pitch": -15},
+    {"name": "low-c-vanilla", "x": 200, "y": 0, "z": 100, "aboveSurface": 3, "yaw": 180, "pitch": -15},
+    {"name": "low-d-vanilla", "x": 200, "y": 0, "z": 100, "aboveSurface": 3, "yaw": 0, "pitch": -15}
+  ],
+  "settleFrames": 600,
+  "sampleFrames": 60,
+  "idleTimeoutSeconds": 60,
+  "totalTimeoutSeconds": 900,
+  "compareVoxyOff": true,
+  "requireRenderer": true,
+  "allowBusy": true,
+  "minLodCoverage": 0.0
+}

@@ -47,6 +47,12 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
 
     @Unique
     private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera, FogParameters fogParameters) {
+        if (VoxyClient.AUTOTEST_SUPPRESS_RENDER) {
+            //Shader packs read voxy's depth targets in their own passes, empty them so the frame really has no lods
+            var renderer = renderPass == DefaultTerrainRenderPasses.CUTOUT ? ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem() : null;
+            if (renderer != null) renderer.clearForSuppressedFrame();
+            return;
+        }
         if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
             var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
             if (renderer != null) {

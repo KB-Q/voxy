@@ -1,5 +1,7 @@
 package me.cortex.voxy.client.core.rendering.section.backend.mdic;
 
+import me.cortex.voxy.common.util.JomlMem;
+
 
 import me.cortex.voxy.client.RenderStatistics;
 import me.cortex.voxy.client.VoxyClient;
@@ -154,16 +156,16 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
         
         var mat = new Matrix4f(viewport.MVP);
         mat.translate(-viewport.innerTranslation.x, -viewport.innerTranslation.y, -viewport.innerTranslation.z);
-        mat.getToAddress(ptr); ptr += 4*4*4;
+        JomlMem.put(mat, ptr); ptr += 4*4*4;
 
-        viewport.section.getToAddress(ptr); ptr += 4*3;
+        JomlMem.put(viewport.section, ptr); ptr += 4*3;
 
         if (viewport.frameId<0) {
             Logger.error("Frame ID negative, this will cause things to break, wrapping around");
             viewport.frameId &= 0x7fffffff;
         }
         MemoryUtil.memPutInt(ptr, viewport.frameId&0x7fffffff); ptr += 4;
-        viewport.innerTranslation.getToAddress(ptr); ptr += 4*3;
+        JomlMem.put(viewport.innerTranslation, ptr); ptr += 4*3;
 
         UploadStream.INSTANCE.commit();
     }

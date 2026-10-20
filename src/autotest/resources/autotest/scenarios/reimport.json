@@ -1,0 +1,37 @@
+{
+  "name": "reimport",
+  "world": "voxy-autotest",
+  "seed": 8675309,
+  "setupCommands": [
+    "gamemode spectator",
+    "gamerule doDaylightCycle false",
+    "gamerule doWeatherCycle false",
+    "gamerule doMobSpawning false",
+    "time set 6000",
+    "weather clear"
+  ],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "postSeedCommands": [
+    "save-all flush",
+    "voxy import current"
+  ],
+  "waitForImport": true,
+  "viewpoints": [
+    {
+      "name": "spawn-high",
+      "x": 0,
+      "y": 200,
+      "z": 0,
+      "yaw": 0,
+      "pitch": 20
+    }
+  ],
+  "settleFrames": 120,
+  "sampleFrames": 120,
+  "idleTimeoutSeconds": 120,
+  "totalTimeoutSeconds": 900,
+  "compareVoxyOff": false,
+  "requireRenderer": false,
+  "minLodCoverage": 0.0
+}

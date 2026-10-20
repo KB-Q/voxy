@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core;
 
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
@@ -31,6 +32,8 @@ import static org.lwjgl.opengl.GL45C.glBindTextureUnit;
 import static org.lwjgl.opengl.GL45C.glTextureParameterf;
 
 public class NormalRenderPipeline extends AbstractRenderPipeline {
+    //Performance experiment, the output is not valid without it
+    private static final boolean DEBUG_NO_SSAO = Boolean.getBoolean("voxy.debug.noSSAO");
     private GlTexture colourTex;
     private GlTexture colourSSAOTex;
     private final GlFramebuffer fbSSAO = new GlFramebuffer();
@@ -66,11 +69,13 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
             this.fbSSAO.bind(this.fb.getDepthAttachmentType(), this.fb.getDepthTex()).bind(GL_COLOR_ATTACHMENT0, this.colourSSAOTex).verify();
 
 
-            glTextureParameterf(this.colourTex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameterf(this.colourTex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTextureParameterf(this.colourSSAOTex.id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameterf(this.colourSSAOTex.id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
+            GlCompat.textureParameteri(this.colourTex.id, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GlCompat.textureParameteri(this.colourTex.id, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            GlCompat.textureParameteri(this.colourSSAOTex.id, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GlCompat.textureParameteri(this.colourSSAOTex.id, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            if (!GlCompat.GL41) {//GL 4.3, on older versions depth stencil textures always sample the depth
+                GlCompat.textureParameteri(this.fb.getDepthTex().id, GL_TEXTURE_2D, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
+            }
         }
 
         this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);
@@ -81,7 +86,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
     @Override
     protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceFrameBuffer) {
         GPUTiming.INSTANCE.marker("ao");
-        this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceFrameBuffer);
+        if (!DEBUG_NO_SSAO) this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceFrameBuffer);
         glBindFramebuffer(GL_FRAMEBUFFER, this.fbSSAO.id);
     }
 
@@ -99,15 +104,15 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
                 float endDistance = Math.max(Minecraft.getInstance().gameRenderer.getRenderDistance(), 20*16);//TODO: make this constant a config option
                 endDistance *= (float)Math.sqrt(3);
                 float startDelta = -start * invEndFogDelta;
-                glUniform4f(4, invEndFogDelta, startDelta, Math.clamp(endDistance*invEndFogDelta+startDelta, 0, 1),0);//
-                glUniform4f(5, viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
+                glUniform4f(this.finalBlit.loc(4), invEndFogDelta, startDelta, Math.clamp(endDistance*invEndFogDelta+startDelta, 0, 1),0);//
+                glUniform4f(this.finalBlit.loc(5), viewport.fogParameters.red(), viewport.fogParameters.green(), viewport.fogParameters.blue(), viewport.fogParameters.alpha());
             } else {
-                glUniform4f(4, 0, 0, 0, 0);
-                glUniform4f(5, 0, 0, 0, 0);
+                glUniform4f(this.finalBlit.loc(4), 0, 0, 0, 0);
+                glUniform4f(this.finalBlit.loc(5), 0, 0, 0, 0);
             }
         }
 
-        glBindTextureUnit(3, this.colourSSAOTex.id);
+        GlCompat.bindTextureUnit(3, this.colourSSAOTex.id);
 
         //Do alpha blending
         //Unbelievably jank hack, only blit out to the framebuffer if we are rendering fog

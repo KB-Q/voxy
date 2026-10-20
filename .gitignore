@@ -5,3 +5,13 @@
 /run/
 /out/
 /logs/
+
+bin/
+.classpath
+.project
+*.launch
+.settings/
+
+.vscode/
+/run-autotest/
+/run-autotest-1211/

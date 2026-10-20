@@ -25,6 +25,16 @@ import static org.lwjgl.opengl.GL44.GL_MAP_COHERENT_BIT;
 import static org.lwjgl.opengl.GL45.glClearNamedFramebufferfi;
 import static org.lwjgl.opengl.GL45C.*;
 import static org.lwjgl.opengl.GL45C.glCreateFramebuffers;
+import static org.lwjgl.opengl.GL45C.GL_FLOAT;
+import static org.lwjgl.opengl.GL45C.GL_RED;
+import static org.lwjgl.opengl.GL45C.GL_TEXTURE_MIN_FILTER;
+import static org.lwjgl.opengl.GL45C.GL_VENDOR;
+import static org.lwjgl.opengl.GL45C.GL_VERSION;
+import static org.lwjgl.opengl.GL45C.glDeleteTextures;
+import static org.lwjgl.opengl.GL45C.glFinish;
+import static org.lwjgl.opengl.GL45C.glGetInteger;
+import static org.lwjgl.opengl.GL45C.glGetString;
+import static org.lwjgl.opengl.GL31C.GL_MAX_TEXTURE_BUFFER_SIZE;
 import static org.lwjgl.opengl.NVXGPUMemoryInfo.*;
 
 public class Capabilities {
@@ -50,6 +60,14 @@ public class Capabilities {
     public final boolean nvBarryCoords;
     public final boolean hasBrokenDepthSampler;
 
+    public enum Backend {
+        GL46,//Compute + indirect count draws, the gpu driven renderer
+        GL41,//Texture buffers + instanced draws, cpu traversal (macOS)
+        NONE
+    }
+    public final Backend backend;
+    public final int maxTextureBufferSize;//In texels
+
     public Capabilities() {
         var cap = GL.getCapabilities();
         this.sparseBuffer = cap.GL_ARB_sparse_buffer;
@@ -60,7 +78,9 @@ public class Capabilities {
         this.canQueryGpuMemory = cap.GL_NVX_gpu_memory_info;
         //this.INT64_t = cap.GL_ARB_gpu_shader_int64 || cap.GL_AMD_gpu_shader_int64;
         //The only reliable way to test for int64 support is to try compile a shader
-        this.INT64_t = testShaderCompilesOk(ShaderType.COMPUTE, """
+        //Compute shaders and SSBOs need GL 4.3, dont query them on older contexts (e.g. macOS GL 4.1) to not generate gl errors
+        boolean gl43 = cap.OpenGL43;
+        this.INT64_t = gl43 && testShaderCompilesOk(ShaderType.COMPUTE, """
                 #version 430
                 #extension GL_ARB_gpu_shader_int64 : require
                 layout(local_size_x=32) in;
@@ -68,7 +88,7 @@ public class Capabilities {
                     uint64_t a = 1234;
                 }
                 """);
-        if (cap.GL_KHR_shader_subgroup) {
+        if (gl43 && cap.GL_KHR_shader_subgroup) {
             this.subgroup = testShaderCompilesOk(ShaderType.COMPUTE, """
                 #version 430
                 #extension GL_KHR_shader_subgroup_basic : require
@@ -82,8 +102,8 @@ public class Capabilities {
             this.subgroup = false;
         }
 
-        this.ssboMaxSize = glGetInteger64(GL_MAX_SHADER_STORAGE_BLOCK_SIZE);
-        this.ssboBindingAlignment = glGetInteger(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT);
+        this.ssboMaxSize = gl43?glGetInteger64(GL_MAX_SHADER_STORAGE_BLOCK_SIZE):0;
+        this.ssboBindingAlignment = gl43?glGetInteger(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT):16;
 
         this.isMesa = glGetString(GL_VERSION).toLowerCase(Locale.ROOT).contains("mesa");
         var vendor = glGetString(GL_VENDOR).toLowerCase(Locale.ROOT);
@@ -101,6 +121,9 @@ public class Capabilities {
 
         this.nvBarryCoords = cap.GL_NV_fragment_shader_barycentric;
 
+        this.maxTextureBufferSize = glGetInteger(GL_MAX_TEXTURE_BUFFER_SIZE);
+        this.backend = selectBackend(cap, this.compute && this.indirectParameters);
+
         if (this.compute&&this.isAmd) {
             this.hasBrokenDepthSampler = testDepthSampler();
             if (this.hasBrokenDepthSampler) {
@@ -112,6 +135,27 @@ public class Capabilities {
     }
 
     public static void init() {
+    }
+
+    //-Dvoxy.backend=auto|gl46|gl41 overrides the automatic choice (if the context can run it)
+    private static Backend selectBackend(org.lwjgl.opengl.GLCapabilities cap, boolean gl46Capable) {
+        boolean gl41Capable = cap.OpenGL41 && cap.GL_ARB_texture_storage;
+        String requested = System.getProperty("voxy.backend", "auto").toLowerCase(Locale.ROOT);
+        switch (requested) {
+            case "gl46", "mdic" -> {
+                if (gl46Capable) return Backend.GL46;
+                Logger.error("Requested gl46 backend but the context does not support it");
+            }
+            case "gl41" -> {
+                if (gl41Capable) return Backend.GL41;
+                Logger.error("Requested gl41 backend but the context does not support it");
+            }
+            case "auto" -> {}
+            default -> Logger.error("Unknown voxy.backend value: " + requested);
+        }
+        if (gl46Capable) return Backend.GL46;
+        if (gl41Capable) return Backend.GL41;
+        return Backend.NONE;
     }
 
     private static boolean testDepthSampler() {

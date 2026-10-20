@@ -74,7 +74,7 @@ uvec3 makeRemainingAttributes(const in BlockModel model, const in Quad quad, uin
     uint tintColour = model.colourTint;
 
     if (modelHasBiomeLUT(model)) {
-        tintColour = colourData[tintColour + extractBiomeId(quad)];
+        tintColour = getModelColour(tintColour + extractBiomeId(quad));
     }
 
     #ifdef PATCHED_SHADER
@@ -122,11 +122,15 @@ void setupQuad(out QuadData quad, const in Quad rawQuad, uvec2 sPos, bool genera
 
     uint face = extractFace(rawQuad);
     uint modelId = extractStateId(rawQuad);
-    BlockModel model = modelData[modelId];
-    uint faceData = model.faceData[face];
+    //Only the provoking vertex needs the whole model
+    uint faceData = getModelFaceData(modelId, face);
     ivec2 quadSize = extractSize(rawQuad);
 
+    //Only the provoking vertex computes the attributes, the others must still be defined: left undefined, the macOS
+    // shader compiler miscompiles the shader pack (PATCHED_SHADER) variant and drops quads, leaving see-through terrain
+    quad.attributeData = uvec4(0);
     if (generateAttributes) {
+        BlockModel model = getModel(modelId);
         quad.attributeData.x = makeQuadFlags(faceData, modelId, quadSize, model, face);
         quad.attributeData.yzw = makeRemainingAttributes(model, rawQuad, lodLevel, face);
     }

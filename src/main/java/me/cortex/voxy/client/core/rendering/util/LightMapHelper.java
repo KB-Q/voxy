@@ -1,14 +1,14 @@
 package me.cortex.voxy.client.core.rendering.util;
 
-import static org.lwjgl.opengl.GL33.glBindSampler;
-import static org.lwjgl.opengl.GL45.glBindTextureUnit;
-
+import me.cortex.voxy.client.core.gl.GlCompat;
 import net.minecraft.client.Minecraft;
+
+import static org.lwjgl.opengl.GL33.glBindSampler;
 
 public class LightMapHelper {
     public static void bind(int lightingIndex) {
         glBindSampler(lightingIndex, 0);
-        glBindTextureUnit(lightingIndex, getLightmapTextureId());
+        GlCompat.bindTextureUnit(lightingIndex, getLightmapTextureId());
     }
 
     public static int getLightmapTextureId() {

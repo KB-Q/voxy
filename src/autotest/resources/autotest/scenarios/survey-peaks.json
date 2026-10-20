@@ -1,0 +1,17 @@
+{
+  "name": "survey-peaks",
+  "world": "voxy-autotest",
+  "seed": 8675309,
+  "setupCommands": ["gamemode spectator"],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [],
+  "settleFrames": 10,
+  "sampleFrames": 10,
+  "idleTimeoutSeconds": 10,
+  "totalTimeoutSeconds": 300,
+  "compareVoxyOff": false,
+  "requireRenderer": false,
+  "minLodCoverage": 0.0,
+  "surveyPeaks": true
+}

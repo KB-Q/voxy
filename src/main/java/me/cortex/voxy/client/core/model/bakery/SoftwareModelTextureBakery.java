@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureImage;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL11.GL_UNPACK_ALIGNMENT;
 import static org.lwjgl.opengl.GL11C.GL_RGBA;
@@ -80,7 +79,12 @@ public class SoftwareModelTextureBakery {
         glPixelStorei(GL_PACK_SKIP_ROWS, 0);
         glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
         glPixelStorei(GL_PACK_ALIGNMENT, 4);
-        glGetTextureImage(((GlTexture) tex).glId(), 0, GL_RGBA, GL_UNSIGNED_BYTE, texture);
+        //Bind and read instead of glGetTextureImage, which needs GL 4.5 (macOS has 4.1)
+        int prevTexture = glGetInteger(GL_TEXTURE_BINDING_2D);
+        glBindTexture(GL_TEXTURE_2D, ((GlTexture) tex).glId());
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture);
+        glBindTexture(GL_TEXTURE_2D, prevTexture);
+        glPixelStorei(GL_PACK_ROW_LENGTH, 0);//Pack state is global, do not leave the atlas row length behind
         this.rasterizer.setSamplerTexture(texture, width, height);
     }
 

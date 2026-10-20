@@ -8,6 +8,7 @@ import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.model.ModelStore;
@@ -15,6 +16,8 @@ import me.cortex.voxy.client.core.rendering.ChunkBoundRenderer;
 import me.cortex.voxy.client.core.rendering.RenderDistanceTracker;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.ViewportSelector;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41LodSelection;
+import me.cortex.voxy.client.core.rendering.backend.gl41.Gl41SectionRenderer;
 import me.cortex.voxy.client.core.rendering.building.RenderGenerationService;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
 import me.cortex.voxy.client.core.rendering.hierachical.HierarchicalOcclusionTraverser;
@@ -52,6 +55,8 @@ import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BUFFER;
 import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER_BINDING;
 
 public class VoxyRenderSystem {
+    //Debug: do not cut voxy terrain out of the loaded vanilla chunk volume
+    private static final boolean DEBUG_NO_CHUNK_BOUNDS = Boolean.getBoolean("voxy.debug.noChunkBounds");
     private final WorldEngine worldIn;
 
 
@@ -59,8 +64,9 @@ public class VoxyRenderSystem {
     private final RenderGenerationService renderGen;
     private final IGeometryData geometryData;
     private final AsyncNodeManager nodeManager;
-    private final NodeCleaner nodeCleaner;
-    private final HierarchicalOcclusionTraverser traversal;
+    private final NodeCleaner nodeCleaner;//null on GL 4.1
+    private final HierarchicalOcclusionTraverser traversal;//null on GL 4.1
+    private final Gl41LodSelection gl41LodSelection;//GL 4.1 only
 
 
     private final RenderDistanceTracker renderDistanceTracker;
@@ -73,6 +79,9 @@ public class VoxyRenderSystem {
 
     private static AbstractSectionRenderer.Factory<?,? extends IGeometryData> getRenderBackendFactory() {
         //TODO: need todo a thing where selects optimal section render based on if supports the pipeline and geometry data type
+        if (GlCompat.GL41) {
+            return Gl41SectionRenderer.FACTORY;
+        }
         return MDICSectionRenderer.FACTORY;
     }
 
@@ -91,10 +100,7 @@ public class VoxyRenderSystem {
         }
 
         //Fking HATE EVERYTHING AAAAAAAAAAAAAAAA
-        int[] oldBufferBindings = new int[10];
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
-        }
+        int[] oldBufferBindings = getSSBOBindings();
 
         try {
             //wait for opengl to be finished, this should hopefully ensure all memory allocations are free
@@ -112,8 +118,15 @@ public class VoxyRenderSystem {
                 this.geometryData = new BasicSectionGeometryData(1<<20, RenderResourceReuse.getOrCreateGeometryBuffer());
 
                 this.nodeManager = new AsyncNodeManager(1 << 21, this.geometryData, this.renderGen);
-                this.nodeCleaner = new NodeCleaner(this.nodeManager);
-                this.traversal = new HierarchicalOcclusionTraverser(this.nodeManager, this.nodeCleaner, this.renderGen);
+                if (GlCompat.GL41) {
+                    this.nodeCleaner = null;
+                    this.traversal = null;
+                    this.gl41LodSelection = new Gl41LodSelection(this.nodeManager, this.renderGen, ((BasicSectionGeometryData)this.geometryData).getMaxSectionCount());
+                } else {
+                    this.nodeCleaner = new NodeCleaner(this.nodeManager);
+                    this.traversal = new HierarchicalOcclusionTraverser(this.nodeManager, this.nodeCleaner, this.renderGen);
+                    this.gl41LodSelection = null;
+                }
 
                 world.setDirtyCallback(this.nodeManager::worldEvent);
 
@@ -125,9 +138,14 @@ public class VoxyRenderSystem {
 
             this.pipeline = RenderPipelineFactory.createPipeline(this.properties, this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);
             this.pipeline.setupExtraModelBakeryData(this.modelService);//Configure the model service
+            if (this.gl41LodSelection != null) {
+                this.pipeline.setGl41LodSelection(this.gl41LodSelection);
+            }
 
             //Late stage traversal compile for shaders with taa
-            this.traversal.lateStageCompile(this.pipeline);
+            if (this.traversal != null) {
+                this.traversal.lateStageCompile(this.pipeline);
+            }
 
 
             var sectionRenderer = backendFactory.create(this.pipeline, this.modelService.getStore(), this.geometryData);
@@ -161,9 +179,7 @@ public class VoxyRenderSystem {
             throw e;
         }
 
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
-        }
+        restoreSSBOBindings(oldBufferBindings);
 
         for (int i = 0; i < 12; i++) {
             GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
@@ -239,10 +255,7 @@ public class VoxyRenderSystem {
         TimingStatistics.main.start();
 
         //TODO: optimize
-        int[] oldBufferBindings = new int[10];
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
-        }
+        int[] oldBufferBindings = getSSBOBindings();
 
 
         int oldFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
@@ -264,7 +277,7 @@ public class VoxyRenderSystem {
         this.pipeline.preSetup(viewport);
 
         TimingStatistics.E.start();
-        if ((!VoxyClient.disableSodiumChunkRender())&&!IrisUtil.irisShadowActive()) {
+        if ((!VoxyClient.disableSodiumChunkRender())&&!IrisUtil.irisShadowActive()&&!DEBUG_NO_CHUNK_BOUNDS) {
             this.chunkBoundRenderer.render(viewport);
         } else {
             viewport.depthBoundingBuffer.clear(this.properties.inverseClearDepth());
@@ -323,6 +336,13 @@ public class VoxyRenderSystem {
             for (int i = 0; i < oldBufferBindings.length; i++) {
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
             }
+            glBlendEquation(GL_FUNC_ADD);
+            GlStateManager._blendFuncSeparate(0,0, 0, 0);
+            glBlendFunc(0, 0);
+            GlStateManager._disableBlend();
+            glDisable(GL_BLEND);
+            GlStateManager._depthFunc(GL_LESS);
+            glDepthFunc(GL_LESS);
 
             //((SodiumShader) Iris.getPipelineManager().getPipelineNullable().getSodiumPrograms().getProgram(DefaultTerrainRenderPasses.CUTOUT).getInterface()).setupState(DefaultTerrainRenderPasses.CUTOUT, fogParameters);
         }
@@ -360,6 +380,21 @@ public class VoxyRenderSystem {
 
 
 
+    //There are no SSBOs on GL 4.1
+    private static int[] getSSBOBindings() {
+        int[] bindings = new int[GlCompat.GL41?0:10];
+        for (int i = 0; i < bindings.length; i++) {
+            bindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+        }
+        return bindings;
+    }
+
+    private static void restoreSSBOBindings(int[] bindings) {
+        for (int i = 0; i < bindings.length; i++) {
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, bindings[i]);
+        }
+    }
+
     private void autoBalanceSubDivSize() {
         //only increase quality while there are very few mesh queues, this stops,
         // e.g. while flying and is rendering alot of low quality chunks
@@ -376,6 +411,16 @@ public class VoxyRenderSystem {
         if (MAX_FPS < Minecraft.getInstance().getFps() && canDecreaseSize) {
             VoxyConfig.CONFIG.subDivisionSize = Math.max(VoxyConfig.CONFIG.subDivisionSize - DECREASE_PER_SECOND / Math.max(1f, Minecraft.getInstance().getFps()), 28);
         }
+    }
+
+    //Used by the dev autotest harness when it captures a frame without voxy
+    public void clearForSuppressedFrame() {
+        this.pipeline.clearDepthTargets();
+    }
+
+    //Used by the dev autotest harness: true when no meshing, model baking or node work is pending
+    public boolean isIdle() {
+        return this.renderGen.getTaskCount() == 0 && this.modelService.areQueuesEmpty() && !this.nodeManager.hasWork();
     }
 
     public static float getRenderDistance() {
@@ -483,6 +528,7 @@ public class VoxyRenderSystem {
             this.renderGen.addDebugData(debug);
             this.nodeManager.addDebug(debug);
             this.pipeline.addDebug(debug);
+            debug.add(me.cortex.voxy.client.IngestStats.line());
         }
         {
             TimingStatistics.update();
@@ -508,8 +554,8 @@ public class VoxyRenderSystem {
 
             this.modelService.shutdown();
             this.renderGen.shutdown();
-            this.traversal.free();
-            this.nodeCleaner.free();
+            if (this.traversal != null) this.traversal.free();
+            if (this.nodeCleaner != null) this.nodeCleaner.free();
             this.geometryData.free();
             if (((BasicSectionGeometryData)this.geometryData).isExternalGeometryBuffer) {
                 RenderResourceReuse.giveBackGeometryBuffer(((BasicSectionGeometryData)this.geometryData).getGeometryBuffer());

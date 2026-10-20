@@ -14,16 +14,24 @@ layout(binding = 2) uniform sampler2D depthTex;
 
 //#define DEBUG_RENDER
 
+//Performance experiments: DEBUG_NO_DISCARD keeps every fragment (early depth testing stays possible),
+// DEBUG_FLAT_FRAG writes the vertex colour without any texturing
+#ifdef DEBUG_NO_DISCARD
+#define DISCARD {}
+#else
+#define DISCARD discard
+#endif
+
 //TODO: need to fix when merged quads have discardAlpha set to false but they span multiple tiles
 // however they are not a full block
 
-layout(location = 0) in flat uvec4 interData;
+layout(location = 0) flat in uvec4 interData;
 #ifndef USE_NV_BARRY
 layout(location = 1) in vec2 uv;
 #endif
 
 #ifdef DEBUG_RENDER
-layout(location = 7) in flat uint quadDebug;
+layout(location = 7) flat in uint quadDebug;
 #endif
 
 
@@ -37,7 +45,11 @@ layout(location = 0) out vec4 outColour;
 
 #endif
 
+#ifdef GL41
+#import <voxy:lod/gl41/bindings.glsl>
+#else
 #import <voxy:lod/gl46/bindings.glsl>
+#endif
 #import <voxy:lod/lighting.glsl>
 
 
@@ -114,12 +126,16 @@ vec4 computeColour(vec2 texturePos, vec4 colour) {
 
 
 void main() {
+    #if defined(DEBUG_FLAT_FRAG) && !defined(PATCHED_SHADER)
+    outColour = uint2vec4RGBA(interData.y);
+    return;
+    #endif
     //vec2 uv = vec2(0);
     //Tile is the tile we are in
     vec2 tile;
     #ifdef USE_NV_BARRY
     #ifdef USE_SINGLE_TRI
-    if (gl_BaryCoordNV.x>=0.5||gl_BaryCoordNV.y>=0.5) discard;
+    if (gl_BaryCoordNV.x>=0.5||gl_BaryCoordNV.y>=0.5) DISCARD;
     vec2 uv = gl_BaryCoordNV.yx*(vec2((interData.x>>8)&0xFu, (interData.x>>12)&0xFu)+1)*2;
     #else
     vec2 uv = mix(gl_BaryCoordNV.yx, 1-gl_BaryCoordNV.xz, gl_PrimitiveID&1)*(vec2((interData.x>>8)&0xFu, (interData.x>>12)&0xFu)+1);
@@ -144,7 +160,7 @@ void main() {
     // fragments, we do this here after derivative computation
     //Trying it with all shaders
     //#ifdef PATCHED_SHADER
-    #ifndef PATCHED_SHADER_ALLOW_DERIVATIVES
+    #if !defined(PATCHED_SHADER_ALLOW_DERIVATIVES) && !defined(GL41)
     if (gl_HelperInvocation) {
         return;
     }
@@ -152,13 +168,13 @@ void main() {
     //#endif
 
     if (any(notEqual(clamp(tile, vec2(0), vec2((interData.x>>8)&0xFu, (interData.x>>12)&0xFu)), tile))) {
-        discard;
+        DISCARD;
         return;
     }
 
     //Check the minimum bounding texture and ensure we are greater than it
     if (DEPTH_SCALAR_COMPARE(gl_FragCoord.z, texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).r)) {
-        discard;
+        DISCARD;
         return;
     }
 
@@ -174,12 +190,12 @@ void main() {
         //This is stupidly stupidly bad for divergence
         //TODO: FIXME, basicly what this do is sample the exact pixel (no lod) for discarding, this stops mipmapping fucking it over
         #ifndef DEBUG_RENDER
-        discard;
+        DISCARD;
         return;
         #endif
     }
 
-    #ifndef PATCHED_SHADER_ALLOW_DERIVATIVES
+    #if !defined(PATCHED_SHADER_ALLOW_DERIVATIVES) && !defined(GL41)
     if (gl_HelperInvocation) {
         return;
     }
@@ -200,7 +216,7 @@ void main() {
 
     #else
     uint modelId = getModelId();
-    BlockModel model = modelData[modelId];
+    BlockModel model = getModel(modelId);
     uint tintingFunction = tintingState();
     bool doTint = tintingFunction==2;//Always tint if function == 2
     if (tintingFunction==1) {//Partial tint

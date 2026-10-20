@@ -11,6 +11,9 @@ public class GlPersistentMappedBuffer extends TrackedObject {
     private final long size;
     private final long addr;
     public GlPersistentMappedBuffer(long size, int flags) {
+        if (GlCompat.GL41) {
+            throw new UnsupportedOperationException("Persistent mapped buffers are not available on the GL 4.1 backend");
+        }
         this.id = glCreateBuffers();
         this.size = size;
         glNamedBufferStorage(this.id, size, GL_MAP_PERSISTENT_BIT|(flags&(GL_MAP_COHERENT_BIT|GL_MAP_WRITE_BIT|GL_MAP_READ_BIT|GL_CLIENT_STORAGE_BIT)));

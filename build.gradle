@@ -137,16 +137,23 @@ dependencies {
 
     modCompileOnly("maven.modrinth:iris:1.10.7+1.21.11-fabric")
     modRuntimeOnlyMsk("maven.modrinth:iris:1.10.7+1.21.11-fabric")
+    //The dev run does not load iris's nested libraries, these are the versions iris 1.10.7 ships
+    modRuntimeOnlyMsk("io.github.douira:glsl-transformer:3.0.0-pre3")
+    modRuntimeOnlyMsk("org.anarres:jcpp:1.4.14")
+    modRuntimeOnlyMsk("org.antlr:antlr4-runtime:4.13.1")
 
     //modCompileOnly("maven.modrinth:starlight:1.1.3+1.20.4")
 
     //modCompileOnly("maven.modrinth:immersiveportals:v5.1.7-mc1.20.4")
 
     modCompileOnly("maven.modrinth:chunky:1.4.54-fabric")
-    //modRuntimeOnlyMsk("maven.modrinth:chunky:1.4.40-fabric")
+    //Pregenerator for the autotest scenarios, voxy itself does not depend on it
+    modRuntimeOnlyMsk("maven.modrinth:chunky:1.4.54-fabric")
 
-    modRuntimeOnlyMsk("maven.modrinth:spark:1.10.152-fabric")
-    modRuntimeOnlyMsk("maven.modrinth:fabric-permissions-api:0.3.3")
+    //spark (upstream dev profiler) needs fabric-permissions-api, not needed for the autotest runs
+    //modRuntimeOnlyMsk("maven.modrinth:spark:1.10.152-fabric")
+    //fabric-permissions-api 0.3.3 predates the 1.21.11 permission api and crashes once chunky checks a permission
+    //modRuntimeOnlyMsk("maven.modrinth:fabric-permissions-api:0.3.3")
     //modRuntimeOnly("maven.modrinth:nsight-loader:1.2.0")
 
     //modImplementation('io.github.douira:glsl-transformer:2.0.1')
@@ -200,10 +207,11 @@ tasks.register('makeExcludedRocksDB', Zip) {
     from {->zipTree(files.first())}
     archiveFileName.set(providers.provider{files.first().name})
 
+    //Keep the macOS libraries (the default storage backend is rocksdb), still drop the more exotic targets
     exclude {
         def file = it.name
         if (file.endsWith(".jnilib")) {
-            return true
+            return !(file.contains("osx-arm64") || file.contains("osx-x86_64"))
         }
         if (!file.endsWith(".so")) {
             return false
@@ -225,9 +233,7 @@ processIncludeJars {
 }
 
 remapJar {
-    doFirst {
-        delete fileTree(getDestinationDirectory().get())
-    }
+    //Previous jars are kept, the commit hash classifier keeps their names apart
 
     if (!isInGHA) {
         def hash = gitCommitHash();
@@ -257,6 +263,11 @@ dependencies {
     include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:natives-windows")
     include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:natives-linux")
     include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:natives-linux")
+    //macOS: lmdb and zstd are not part of the lwjgl natives minecraft ships
+    for (String natives : ["natives-macos", "natives-macos-arm64"]) {
+        include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:$natives")
+        include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:$natives")
+    }
     if (INCLUDE_OTHER_ARCHS) {
         runtimeOnly "org.lwjgl:lwjgl:$lwjglVersion:natives-linux-arm64"
         include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:natives-linux-arm64")
@@ -291,5 +302,94 @@ if (!isInGHA) {
         modRuntimeOnly('me.djtheredstoner:DevAuth-fabric:1.2.2') {
             exclude group: 'net.fabricmc', module: 'fabric-loader'
         }
+    }
+}
+
+//Dev only autotest harness, its own mod in its own source set so it is never part of the release jar
+dependencies {
+    testImplementation platform("org.junit:junit-bom:5.11.4")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+sourceSets {
+    autotest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+}
+
+loom {
+    mods {
+        voxy { sourceSet sourceSets.main }
+        voxy_autotest { sourceSet sourceSets.autotest }
+    }
+    runs {
+        autotest {
+            client()
+            name = "Voxy Autotest"
+            source sourceSets.autotest
+            runDir "run-autotest-1211"
+            programArgs "--width", "1280", "--height", "720"
+            vmArgs(*autotestJvmArgs())
+        }
+    }
+}
+
+//Shared by the dev autotest run and the production autotest run
+def autotestJvmArgs() {
+    def args = ["-Dvoxy.autotest=true",
+                "-Dvoxy.autotest.scenario=${project.findProperty('voxy.autotest.scenario') ?: 'smoke'}".toString(),
+                "-Dvoxy.autotest.out=${project.findProperty('voxy.autotest.out') ?: 'autotest-out'}".toString(),
+                "-Dvoxy.autotest.world=${project.findProperty('voxy.autotest.world') ?: 'voxy-autotest'}".toString(),
+                "-Dvoxy.autotest.seed=${project.findProperty('voxy.autotest.seed') ?: '8675309'}".toString(),
+                "-Dsodium.checks.issue2561=false"]
+    //Extra jvm arguments for experiments, e.g. -Pvoxy.autotest.jvmArgs="-Dvoxy.debug.noChunkBounds=true"
+    def extraJvmArgs = project.findProperty('voxy.autotest.jvmArgs')
+    if (extraJvmArgs) {
+        args.addAll(extraJvmArgs.toString().trim().split(/\s+/))
+    }
+    return args
+}
+
+//Production autotest: the remapped release jar and the original (intermediary) mod jars in a production launch,
+// catches remapping and mixin problems the dev run cannot see
+configurations {
+    prodMods { transitive = false }
+}
+
+dependencies {
+    prodMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    prodMods "maven.modrinth:sodium:mc1.21.11-0.8.12-fabric"
+    prodMods "maven.modrinth:iris:1.10.7+1.21.11-fabric"
+    prodMods "maven.modrinth:chunky:1.4.54-fabric"
+}
+
+def autotestJar = tasks.register('autotestJar', Jar) {
+    from sourceSets.autotest.output
+    archiveClassifier = 'autotest-dev'
+    destinationDirectory = layout.buildDirectory.dir('devlibs')
+}
+
+def remapAutotestJar = tasks.register('remapAutotestJar', net.fabricmc.loom.task.RemapJarTask) {
+    inputFile = autotestJar.flatMap { it.archiveFile }
+    archiveClassifier = 'autotest'
+    destinationDirectory = layout.buildDirectory.dir('autotestlibs')
+    addNestedDependencies = false
+}
+
+tasks.register('runProdAutotest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    mods.from(tasks.remapJar, remapAutotestJar, configurations.prodMods)
+    runDir = file('run-autotest-1211')
+    jvmArgs.addAll(autotestJvmArgs())
+    programArgs.addAll("--width", "1280", "--height", "720")
+    //-Pvoxy.autotest.java=21 runs on the java version the vanilla 1.21.11 launcher uses
+    def javaVersion = project.findProperty('voxy.autotest.java')
+    if (javaVersion) {
+        javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(javaVersion.toString().toInteger()) }
     }
 }

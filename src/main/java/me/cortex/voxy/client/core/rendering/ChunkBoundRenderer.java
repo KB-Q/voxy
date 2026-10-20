@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
 import me.cortex.voxy.client.core.RenderProperties;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
 import me.cortex.voxy.client.core.gl.shader.AutoBindingShader;
@@ -26,7 +27,10 @@ import static org.lwjgl.opengl.GL15.GL_ELEMENT_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL30.glBindVertexArray;
 import static org.lwjgl.opengl.GL30C.*;
+import static org.lwjgl.opengl.GL20C.glGetUniformLocation;
+import static org.lwjgl.opengl.GL20C.glUniform1i;
 import static org.lwjgl.opengl.GL31.glDrawElementsInstanced;
+import static org.lwjgl.opengl.GL31C.*;
 import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
 
 //This is a render subsystem, its very simple in what it does
@@ -38,6 +42,8 @@ public class ChunkBoundRenderer {
     private final Long2IntOpenHashMap chunk2idx = new Long2IntOpenHashMap(INIT_MAX_CHUNK_COUNT);
     private long[] idx2chunk = new long[INIT_MAX_CHUNK_COUNT];
     private final Shader rasterShader;
+    private final int chunkPosTexture;//GL 4.1 only, texture buffer view of chunkPosBuffer
+    private final int baseInstanceLocation;//GL 4.1 only
     private final RenderProperties properties;
 
     private final LongOpenHashSet addQueue = new LongOpenHashSet();
@@ -63,8 +69,16 @@ public class ChunkBoundRenderer {
                 .add(ShaderType.FRAGMENT, "voxy:chunkoutline/outline.fsh")
                 .apply(this.properties::apply)
                 .compile()
-                .ubo(0, this.uniformBuffer)
-                .ssbo(1, this.chunkPosBuffer);
+                .ubo(0, this.uniformBuffer);
+        if (GlCompat.GL41) {
+            //No SSBOs on GL 4.1, the shader reads the positions through a texture buffer
+            this.chunkPosTexture = glGenTextures();
+            this.baseInstanceLocation = glGetUniformLocation(this.rasterShader.id(), "baseInstance");
+        } else {
+            ((AutoBindingShader)this.rasterShader).ssbo(1, this.chunkPosBuffer);
+            this.chunkPosTexture = 0;
+            this.baseInstanceLocation = -1;
+        }
     }
 
     public void addSection(long pos) {
@@ -102,9 +116,9 @@ public class ChunkBoundRenderer {
         {//This is recomputed to be in chunk section space not worldsection
 
             //Camera block pos
-            int bx = (int)(viewport.cameraX);
-            int by = (int)(viewport.cameraY);
-            int bz = (int)(viewport.cameraZ);
+            int bx = (int)Math.floor(viewport.cameraX);
+            int by = (int)Math.floor(viewport.cameraY);
+            int bz = (int)Math.floor(viewport.cameraZ);
             new Vector3i(bx, by, bz).getToAddress(ptr); ptr += 4*4;
 
             var negInnerBlock = new Vector3f(
@@ -136,6 +150,15 @@ public class ChunkBoundRenderer {
         this.rasterShader.bind();
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.INSTANCE_BB_BYTE.id());
         if (this.pipeline != null) this.pipeline.bindUniforms();//shader TAA
+        if (GlCompat.GL41) {
+            //Point the texture buffer at the (possibly reallocated) position buffer
+            int prev = glGetInteger(GL_TEXTURE_BINDING_BUFFER);
+            glBindTexture(GL_TEXTURE_BUFFER, this.chunkPosTexture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32I, this.chunkPosBuffer.id);
+            glBindTexture(GL_TEXTURE_BUFFER, prev);
+            GlCompat.bindTextureUnit(1, GL_TEXTURE_BUFFER, this.chunkPosTexture);
+            glUniform1i(this.baseInstanceLocation, 0);
+        }
 
         //Batch the draws into groups of size 32
         int count = this.chunk2idx.size();
@@ -143,7 +166,15 @@ public class ChunkBoundRenderer {
             glDrawElementsInstanced(GL_TRIANGLES, 6 * 2 * 3 * 32, GL_UNSIGNED_BYTE, 0, count/32);
         }
         if (count%32 != 0) {
-            glDrawElementsInstancedBaseInstance(GL_TRIANGLES, 6 * 2 * 3 * (count%32), GL_UNSIGNED_BYTE, 0, 1, (count/32)*32);
+            if (GlCompat.GL41) {//No base instance on GL 4.1
+                glUniform1i(this.baseInstanceLocation, (count/32)*32);
+                glDrawElementsInstanced(GL_TRIANGLES, 6 * 2 * 3 * (count%32), GL_UNSIGNED_BYTE, 0, 1);
+            } else {
+                glDrawElementsInstancedBaseInstance(GL_TRIANGLES, 6 * 2 * 3 * (count%32), GL_UNSIGNED_BYTE, 0, 1, (count/32)*32);
+            }
+        }
+        if (GlCompat.GL41) {
+            GlCompat.bindTextureUnit(1, GL_TEXTURE_BUFFER, 0);
         }
 
         {
@@ -213,13 +244,21 @@ public class ChunkBoundRenderer {
         //Need to resize
         var old = this.chunkPosBuffer;
         this.chunkPosBuffer = new GlBuffer(size * 8L);
-        glCopyNamedBufferSubData(old.id, this.chunkPosBuffer.id, 0, 0, old.size());
+        if (GlCompat.GL41) {
+            glBindBuffer(GL_COPY_READ_BUFFER, old.id);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, this.chunkPosBuffer.id);
+            glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, old.size());
+            glBindBuffer(GL_COPY_READ_BUFFER, 0);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        } else {
+            glCopyNamedBufferSubData(old.id, this.chunkPosBuffer.id, 0, 0, old.size());
+        }
         old.free();
         var old2 = this.idx2chunk;
         this.idx2chunk = new long[size];
         System.arraycopy(old2, 0, this.idx2chunk, 0, old2.length);
         //Replace the old buffer with the new one
-        ((AutoBindingShader)this.rasterShader).ssbo(1, this.chunkPosBuffer);
+        if (!GlCompat.GL41) ((AutoBindingShader)this.rasterShader).ssbo(1, this.chunkPosBuffer);
     }
 
     private void put(int idx, long pos) {
@@ -234,6 +273,7 @@ public class ChunkBoundRenderer {
     }
 
     public void free() {
+        if (GlCompat.GL41) glDeleteTextures(this.chunkPosTexture);
         this.rasterShader.free();
         this.uniformBuffer.free();
         this.chunkPosBuffer.free();

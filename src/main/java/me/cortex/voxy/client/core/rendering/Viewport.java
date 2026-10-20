@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.rendering;
 
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlCompat;
 import me.cortex.voxy.client.core.rendering.util.DepthFramebuffer;
 import me.cortex.voxy.client.core.rendering.util.HiZBuffer;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
@@ -12,7 +13,7 @@ import java.lang.reflect.Field;
 
 public abstract class Viewport <A extends Viewport<A>> {
     //public final HiZBuffer2 hiZBuffer = new HiZBuffer2();
-    public final HiZBuffer hiZBuffer;
+    public final HiZBuffer hiZBuffer;//null on the GL 4.1 backend, it has no occlusion culling
     public final DepthFramebuffer depthBoundingBuffer = new DepthFramebuffer();
 
     private static final Field planesField;
@@ -54,7 +55,7 @@ public abstract class Viewport <A extends Viewport<A>> {
         this.frustumPlanes = planes;
 
         this.properties = properties;
-        this.hiZBuffer = new HiZBuffer(properties);
+        this.hiZBuffer = GlCompat.GL41 ? null : new HiZBuffer(properties);
     }
 
     public final void delete() {
@@ -62,7 +63,7 @@ public abstract class Viewport <A extends Viewport<A>> {
     }
 
     protected void delete0() {
-        this.hiZBuffer.free();
+        if (this.hiZBuffer != null) this.hiZBuffer.free();
         this.depthBoundingBuffer.free();
     }
 

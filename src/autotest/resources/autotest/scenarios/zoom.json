@@ -1,0 +1,20 @@
+{
+  "name": "zoom",
+  "world": "voxy-autotest",
+  "seed": 8675309,
+  "setupCommands": ["gamemode spectator", "time set 6000", "weather clear"],
+  "seedCommands": [],
+  "waitForChunky": false,
+  "viewpoints": [
+    {"name": "far-fov70", "x": 2600, "y": 250, "z": 0, "yaw": 90, "pitch": 4, "fov": 70, "renderDistance": 8},
+    {"name": "far-spyglass", "x": 2600, "y": 250, "z": 0, "yaw": 90, "pitch": 4, "spyglass": true},
+    {"name": "far-fov70-after", "x": 2600, "y": 250, "z": 0, "yaw": 90, "pitch": 4}
+  ],
+  "settleFrames": 600,
+  "sampleFrames": 60,
+  "idleTimeoutSeconds": 90,
+  "totalTimeoutSeconds": 600,
+  "compareVoxyOff": false,
+  "requireRenderer": true,
+  "minLodCoverage": 0.0
+}

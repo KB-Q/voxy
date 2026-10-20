@@ -75,12 +75,21 @@ layout(binding = VISIBILITY_BUFFER_BINDING, std430) VISIBILITY_ACCESS restrict b
 layout(binding = MODEL_BUFFER_BINDING, std430) readonly restrict buffer ModelBuffer {
     BlockModel modelData[];
 };
+BlockModel getModel(uint id) {
+    return modelData[id];
+}
+uint getModelFaceData(uint id, uint face) {
+    return modelData[id].faceData[face];
+}
 #endif
 
 #ifdef MODEL_COLOUR_BUFFER_BINDING
 layout(binding = MODEL_COLOUR_BUFFER_BINDING, std430) readonly restrict buffer ModelColourBuffer {
     uint colourData[];
 };
+uint getModelColour(uint id) {
+    return colourData[id];
+}
 #endif
 
 #ifdef POSITION_SCRATCH_BINDING

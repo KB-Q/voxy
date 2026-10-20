@@ -16,6 +16,7 @@
     "iris.MixinShaderPackSourceNames",
     "iris.MixinStandardMacros",
     "minecraft.MixinBlockableEventLoop",
+    "iris.MixinSamplerLimits",
     "minecraft.MixinClientChunkCache",
     "minecraft.MixinClientCommonPacketListenerImpl",
     "minecraft.MixinClientLevel",

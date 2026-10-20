@@ -22,7 +22,8 @@ public class GPUTiming {
     private float[] timings = new float[0];
     private String[] lables = new String[0];
 
-    private boolean enabled = false;
+    //Timestamp queries are GL 3.3, -Dvoxy.gpuTiming=true enables the per pass gpu times in the debug info
+    private boolean enabled = Boolean.getBoolean("voxy.gpuTiming");
 
     public void marker() {
         this.marker(null);
@@ -188,7 +189,7 @@ public class GPUTiming {
             glQueryCounter(this.query, GL_TIMESTAMP);//This should be gpu side, so should be fast
             glFinish();
             glGetQueryBufferObjectui64v(this.query, this.store.id, GL_QUERY_RESULT_NO_WAIT, slot*8L);
-            glMemoryBarrier(-1);
+            if (!me.cortex.voxy.client.core.gl.GlCompat.GL41) glMemoryBarrier(-1);
         }
 
         public void download(TimingDataConsumer consumer) {

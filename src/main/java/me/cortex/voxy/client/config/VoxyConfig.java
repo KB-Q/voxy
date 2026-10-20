@@ -28,6 +28,7 @@ public class VoxyConfig {
     public boolean enabled = true;
     public boolean enableRendering = true;
     public boolean ingestEnabled = true;
+    public boolean autoImportExistingChunks = true;//Single player: import a world's saved chunks once per dimension (AutoWorldImport)
     public float sectionRenderDistance = 16;
     public int serviceThreads = (int) Math.max(CpuLayout.getCoreCount()/1.5, 1);
     public float subDivisionSize = 64;

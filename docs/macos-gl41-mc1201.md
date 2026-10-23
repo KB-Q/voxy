@@ -103,5 +103,6 @@ Mean frame time in milliseconds, Voxy on / Voxy off, production jar on Java 17:
 | `AUTOTEST_PROD=1 AUTOTEST_JAVA=17 scripts/autotest.sh smoke` | production launch of the release jar on Java 17 |
 | `./gradlew test` | unit tests |
 
+- The test window opens behind the other windows without taking focus, so runs do not interrupt other work. Frame times in that mode were within 0.5 ms of a run with the window in front (measured on the 1.21.1 build). `AUTOTEST_JVM_ARGS="-Dvoxy.autotest.foreground=true"` brings the window to the front as before.
 - Each run writes `report.json`, screenshots and the game log to `run-autotest/autotest/<timestamp>-<scenario>/`. Baselines are read from `run-autotest/autotest/baselines/<scenario>/`.
 - `AUTOTEST_JVM_ARGS` passes extra `-D` options, for example `-Dvoxy.debug.gl41.frag=flat`, `-Dvoxy.debug.noChunkBounds=true`, `-Dvoxy.debug.noPatch=true` (ignore shader pack LoD patches) or `-Dvoxy.debug.dumpShaders=<dir>` (write every compiled shader source).

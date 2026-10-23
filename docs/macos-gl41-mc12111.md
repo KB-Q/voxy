@@ -71,4 +71,4 @@ Mean frame time in milliseconds, Voxy on / Voxy off, production jar on Java 21. 
 
 ## Running the tests
 
-The commands are the same as on 1.20.1 (`scripts/autotest.sh <scenario>`, `AUTOTEST_PROD=1 AUTOTEST_JAVA=21` for the production launch). Results, baselines and worlds are in `run-autotest-1211/`.
+The commands are the same as on 1.20.1 (`scripts/autotest.sh <scenario>`, `AUTOTEST_PROD=1 AUTOTEST_JAVA=21` for the production launch). Results, baselines and worlds are in `run-autotest-1211/`. The test window opens behind the other windows without taking focus; `AUTOTEST_JVM_ARGS="-Dvoxy.autotest.foreground=true"` brings it to the front as before.

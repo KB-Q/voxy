@@ -278,7 +278,7 @@ public final class AutotestRunner {
             for (String tag : tags) {
                 var entry = new LinkedHashMap<String, Object>();
                 entry.put("tag", tag);
-                var key = TagKey.create(Registries.BIOME, new ResourceLocation(tag));
+                var key = TagKey.create(Registries.BIOME, ResourceLocation.parse(tag));
                 var found = level.findClosestBiome3d(b -> b.is(key), new BlockPos(0, 64, 0), 1000, 32, 64);
                 if (found != null) {
                     var pos = found.getFirst();
@@ -370,19 +370,32 @@ public final class AutotestRunner {
     private void applyShaderPack() {
         String pack = System.getProperty("voxy.autotest.shaderPack", this.scenario.shaderPack());
         boolean enable = pack != null && !pack.isEmpty();
-        var config = Iris.getIrisConfig();
-        boolean changed = config.areShadersEnabled() != enable || (enable && !config.getShaderPackName().orElse("").equals(pack));
-        if (changed) {
-            if (enable) config.setShaderPackName(pack);
-            config.setShadersEnabled(enable);
-            try {
-                config.save();
-                Iris.reload();
-            } catch (IOException e) {
-                this.report.fail("could not apply shader pack " + pack + ": " + e);
-            }
+        //The 1.21.1 dev run has no iris (see build.gradle), shader scenarios run in the production launch
+        if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")) {
+            if (enable) this.report.fail("shader pack " + pack + " requested but iris is not loaded");
+            this.report.shaderPack = null;
+            return;
+        }
+        try {
+            IrisAccess.apply(enable, pack);
+        } catch (IOException e) {
+            this.report.fail("could not apply shader pack " + pack + ": " + e);
         }
         this.report.shaderPack = enable ? pack : null;
+    }
+
+    //Iris classes are only touched from here, so the runner loads without iris
+    private static final class IrisAccess {
+        static void apply(boolean enable, String pack) throws IOException {
+            var config = Iris.getIrisConfig();
+            boolean changed = config.areShadersEnabled() != enable || (enable && !config.getShaderPackName().orElse("").equals(pack));
+            if (changed) {
+                if (enable) config.setShaderPackName(pack);
+                config.setShadersEnabled(enable);
+                config.save();
+                Iris.reload();
+            }
+        }
     }
 
     private boolean hasPostSeedCommands() {
@@ -411,15 +424,15 @@ public final class AutotestRunner {
 
     private void openWorld(Minecraft mc) {
         if (mc.getLevelSource().levelExists(this.world)) {
-            mc.createWorldOpenFlows().loadLevel(mc.screen, this.world);
+            mc.createWorldOpenFlows().openWorld(this.world, () -> {});
         } else {
             var settings = new LevelSettings(this.world, GameType.CREATIVE, false, Difficulty.PEACEFUL, true, new GameRules(), WorldDataConfiguration.DEFAULT);
             var options = new WorldOptions(this.seed, true, false);
             if ("amplified".equals(this.scenario.worldPreset())) {
                 mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options,
-                        ra -> ra.registryOrThrow(Registries.WORLD_PRESET).getHolderOrThrow(WorldPresets.AMPLIFIED).value().createWorldDimensions());
+                        ra -> ra.registryOrThrow(Registries.WORLD_PRESET).getHolderOrThrow(WorldPresets.AMPLIFIED).value().createWorldDimensions(), mc.screen);
             } else {
-                mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options, WorldPresets::createNormalWorldDimensions);
+                mc.createWorldOpenFlows().createFreshLevel(this.world, settings, options, WorldPresets::createNormalWorldDimensions, mc.screen);
             }
         }
     }

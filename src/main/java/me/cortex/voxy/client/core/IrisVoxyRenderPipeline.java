@@ -88,11 +88,6 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
     }
 
     @Override
-    public boolean isUsingPipelineData(Object pipelineData) {
-        return this.data == pipelineData;
-    }
-
-    @Override
     public void setupExtraModelBakeryData(ModelBakerySubsystem modelService) {
         modelService.factory.setCustomBlockStateMapping(WorldRenderingSettings.INSTANCE.getBlockStateIds());
     }
@@ -331,5 +326,10 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
     //TODO: Fixme: GET RID OF, this is bad wiring/data flow/ bad program design
     public IrisVoxyRenderPipelineData _getData() {
         return this.data;
+    }
+
+    @Override
+    public boolean isUsingPipelineData(Object pipelineData) {
+        return this.data == pipelineData;
     }
 }

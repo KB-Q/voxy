@@ -24,20 +24,17 @@
     "minecraft.MixinGameRenderer",
     "minecraft.MixinLevelRenderer",
     "minecraft.MixinRenderSystem",
-    "minecraft.MixinStairBlock",
     "minecraft.session.MixinClientPacketListener",
     "minecraft.session.MixinMinecraft",
     "minecraft.util.MixinGPUSelect",
     "sodium.AccessorChunkTracker",
-    "sodium.AccessorSodiumOptionsGUI",
     "sodium.AccessorSodiumWorldRenderer",
     "sodium.MixinChunkJobQueue",
     "sodium.MixinCloudRenderer",
     "sodium.MixinDefaultChunkRenderer",
     "sodium.MixinRenderSectionManager",
-    "sodium.MixinSodiumOptionsGUI",
     "sodium.MixinSodiumWorldRenderer",
-    "sodium.MixinVisibleChunkCollector"
+    "sodium.MixinSectionCollector"
   ],
   "injectors": {
     "defaultRequire": 1

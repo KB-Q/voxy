@@ -12,9 +12,10 @@ import me.cortex.voxy.common.config.section.SectionStorageConfig;
 import me.cortex.voxy.commonImpl.ImportManager;
 import me.cortex.voxy.commonImpl.VoxyInstance;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
-import me.jellysquid.mods.sodium.client.render.SodiumWorldRenderer;
+import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.storage.LevelResource;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class VoxyClientInstance extends VoxyInstance {
@@ -134,7 +135,7 @@ public class VoxyClientInstance extends VoxyInstance {
                     Logger.error("Server info null");
                     basePath = basePath.resolve("UNKNOWN");
                 } else {
-                    if (Minecraft.getInstance().isConnectedToRealms()) {
+                    if (info.isRealm()) {
                         basePath = basePath.resolve("realms");
                     } else {
                         basePath = basePath.resolve(info.ip.replace(":", "_"));

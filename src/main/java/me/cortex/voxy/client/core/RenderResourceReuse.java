@@ -33,7 +33,7 @@ public class RenderResourceReuse {
     public static GlTexture getOrCreateModelStoreTextureAtlas() {
         GlTexture atlas = null;
         if (!MODEL_TEXTURE_CACHE.isEmpty()) {
-            atlas = MODEL_TEXTURE_CACHE.remove(0).zero();
+            atlas = MODEL_TEXTURE_CACHE.removeFirst().zero();
         } else {
             atlas = new GlTexture().store(GL_RGBA8,
                         Integer.numberOfTrailingZeros(ModelFactory.MODEL_TEXTURE_SIZE),
@@ -50,7 +50,7 @@ public class RenderResourceReuse {
     static GlBuffer getOrCreateGeometryBuffer() {
         GlBuffer buffer = null;
         if (!GEOMETRY_BUFFER_CACHE.isEmpty()) {
-            buffer = GEOMETRY_BUFFER_CACHE.remove(0);
+            buffer = GEOMETRY_BUFFER_CACHE.removeFirst();
             //Reuse buffer, todo: probably check the geometry size and try upsize if possible
         } else {
             long capacity = getGeometryBufferSize();

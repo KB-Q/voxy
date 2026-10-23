@@ -418,26 +418,26 @@ public class Mapper {
 
         public static StateEntry deserialize(int id, byte[] data, boolean[] forceResave) {
             try {
-                var compound = NbtIo.readCompressed(new ByteArrayInputStream(data));
+                var compound = NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.unlimitedHeap());
                 if (compound.getInt("id") != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
                 var bsc = compound.getCompound("block_state");
                 var state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
-                if (state.error().isPresent()) {
+                if (state.isError()) {
                     Logger.info("Could not decode blockstate, attempting fixes, error: "+ state.error().get().message());
                     bsc = (CompoundTag) DataFixers.getDataFixer().update(References.BLOCK_STATE, new Dynamic<>(NbtOps.INSTANCE,bsc),0, SharedConstants.getCurrentVersion().getDataVersion().getVersion()).getValue();
                     state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
-                    if (state.error().isPresent()) {
+                    if (state.isError()) {
                         Logger.error("Could not decode blockstate setting to air. id:" + id + " error: " + state.error().get().message());
                         return new StateEntry(id, Blocks.AIR.defaultBlockState());
                     } else {
-                        Logger.info("Fixed blockstate to: " + state.getOrThrow(false, Logger::error));
+                        Logger.info("Fixed blockstate to: " + state.getOrThrow());
                         forceResave[0] |= true;
-                        return new StateEntry(id, state.getOrThrow(false, Logger::error));
+                        return new StateEntry(id, state.getOrThrow());
                     }
                 } else {
-                    return new StateEntry(id, state.getOrThrow(false, Logger::error));
+                    return new StateEntry(id, state.getOrThrow());
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -469,7 +469,7 @@ public class Mapper {
 
         public static BiomeEntry deserialize(int id, byte[] data) {
             try {
-                var compound = NbtIo.readCompressed(new ByteArrayInputStream(data));
+                var compound = NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.unlimitedHeap());
                 if (compound.getInt("id") != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }

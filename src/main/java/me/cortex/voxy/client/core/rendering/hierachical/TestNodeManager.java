@@ -410,10 +410,7 @@ public class TestNodeManager {
             return true;
         } catch (Exception e) {
             var trace = new ArrayList<>(List.of(e.getStackTrace()));
-            // Very hacky budget filter: remove stack frames until we reach runTest (if present)
-            while (!trace.isEmpty() && !trace.get(trace.size() - 1).getMethodName().equals("runTest")) {
-                trace.remove(trace.size() - 1);
-            }
+            while (!trace.getLast().getMethodName().equals("runTest")) trace.removeLast();//Very hacky budget filter
             synchronized (traces) {
                 if (traces.add(trace)) {
                     e.printStackTrace();

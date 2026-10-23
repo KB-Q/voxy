@@ -77,10 +77,16 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
     modImplementation "maven.modrinth:sodium:${project.sodium_version}"
-    modImplementation "maven.modrinth:iris:${project.iris_version}"
-    //iris needs these at runtime in the dev environment
-    modRuntimeOnly "io.github.douira:glsl-transformer:2.0.1"
-    modRuntimeOnly "org.anarres:jcpp:1.4.14"
+    modCompileOnly "maven.modrinth:iris:${project.iris_version}"
+    //Loom's dev remap of iris 1.8.14 drops the descriptor of a mixin target (LevelRenderer.renderSnowAndRain) and the
+    // game crashes, so the dev run has no iris unless -Pvoxy.dev.iris=true; shader tests use the production run
+    if (project.hasProperty("voxy.dev.iris")) {
+        modRuntimeOnly "maven.modrinth:iris:${project.iris_version}"
+        //iris needs these at runtime in the dev environment, the versions iris 1.8.14 ships
+        modRuntimeOnly "io.github.douira:glsl-transformer:3.0.0-pre3"
+        modRuntimeOnly "org.anarres:jcpp:1.4.14"
+        modRuntimeOnly "org.antlr:antlr4-runtime:4.13.1"
+    }
     modImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
     //Pregenerators for the autotest scenarios (voxy itself does not depend on either), -Pvoxy.autotest.chunksmith=true
     // swaps Chunky for Chunksmith in the dev run
@@ -98,7 +104,7 @@ dependencies {
 }
 
 
-def targetJavaVersion = 17
+def targetJavaVersion = 21
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = "UTF-8"
     it.options.release = targetJavaVersion
@@ -203,8 +209,8 @@ remapJar {
     }
 }
 
-//Must match the lwjgl version minecraft 1.20.1 ships
-project.ext.lwjglVersion = "3.3.1"
+//Must match the lwjgl version minecraft 1.21.1 ships
+project.ext.lwjglVersion = "3.3.3"
 
 dependencies {
     implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
@@ -256,7 +262,7 @@ loom {
             client()
             name = "Voxy Autotest"
             source sourceSets.autotest
-            runDir "run-autotest"
+            runDir "run-autotest-121"
             programArgs "--width", "1280", "--height", "720"
             vmArgs(*autotestJvmArgs())
         }
@@ -307,10 +313,10 @@ def remapAutotestJar = tasks.register('remapAutotestJar', net.fabricmc.loom.task
 
 tasks.register('runProdAutotest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
     mods.from(tasks.remapJar, remapAutotestJar, configurations.prodMods)
-    runDir = file('run-autotest')
+    runDir = file('run-autotest-121')
     jvmArgs.addAll(autotestJvmArgs())
     programArgs.addAll("--width", "1280", "--height", "720")
-    //-Pvoxy.autotest.java=17 runs on the java version the vanilla 1.20.1 launcher uses
+    //-Pvoxy.autotest.java=21 runs on the java version the vanilla 1.21.1 launcher uses
     def javaVersion = project.findProperty('voxy.autotest.java')
     if (javaVersion) {
         javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(javaVersion.toString().toInteger()) }

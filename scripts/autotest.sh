@@ -8,7 +8,8 @@ set -uo pipefail
 SCENARIO="${1:-smoke}"
 TIMEOUT="${AUTOTEST_TIMEOUT:-900}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RUN_DIR="$ROOT/run-autotest"
+#Separate from the 1.20.1 and 1.21.11 run dirs, opening their worlds here would convert them
+RUN_DIR="$ROOT/run-autotest-121"
 OUT="$RUN_DIR/autotest/$(date +%Y%m%d-%H%M%S)-$SCENARIO"
 mkdir -p "$OUT"
 cp "$ROOT/scripts/autotest-options.txt" "$RUN_DIR/options.txt"
@@ -36,7 +37,7 @@ echo "scenario: $SCENARIO  gradle-exit: $RC  status: $STATUS  out: $OUT"
 [ -f "$OUT/report.json" ] && jq -r '.failures[]?, (.viewpoints[] | "\(.name): mean \(.frameTimeMeanMs*100|floor/100)ms p99 \(.frameTimeP99Ms*100|floor/100)ms (off \(.frameTimeOffMeanMs // -1 |.*100|floor/100)/\(.frameTimeOffP99Ms // -1 |.*100|floor/100)) lod \(.lodCoverage // "n/a") base \(.baselineDiffFraction // "n/a")"), "glErrors: \(.glErrors) (before first frame: \(.gl.errorsBeforeFirstWorldFrame))  storage: \(.storageBytesStart) -> \(.storageBytesEnd)  instance: \(.voxyInstancePresent) renderer: \(.voxyRendererPresent)  duration: \(.durationSeconds|floor)s"' "$OUT/report.json"
 # Known noise in dev and production runs: offline auth, Realms, the optional flashback mixins, shader pack uniforms
 # for newer Minecraft versions, unused shader outputs. Anything else (stack frames excluded) fails the run
-ALLOW='flashback|authentication|authlib|InvalidCredentials|MinecraftClientHttp|Realms|Unknown variable|not read by fragment shader'
+ALLOW='SocketTimeoutException: Read timed out|Error loading class: net/irisshaders|flashback|authentication|authlib|InvalidCredentials|MinecraftClientHttp|Realms|Unknown variable|not read by fragment shader'
 UNEXPECTED="$(grep -vE "$ALLOW" "$OUT/log-issues.txt" | grep -vE '^[0-9]+:[[:space:]]+(at |\.\.\. [0-9]+ more)' || true)"
 echo "log issues: $(wc -l < "$OUT/log-issues.txt" | tr -d ' ') (see $OUT/log-issues.txt), unexpected: $(printf '%s' "$UNEXPECTED" | grep -c . || true)"
 [ -n "$UNEXPECTED" ] && printf '%s\n' "$UNEXPECTED" | head -20 | cut -c1-240

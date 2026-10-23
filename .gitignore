@@ -14,3 +14,4 @@ bin/
 
 .vscode/
 /run-autotest/
+/run-autotest-121/

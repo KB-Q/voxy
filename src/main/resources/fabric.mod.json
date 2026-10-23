@@ -23,6 +23,9 @@
     "modmenu": [
       "me.cortex.voxy.client.config.ModMenuIntegration"
     ],
+    "sodium:config_api_user": [
+      "me.cortex.voxy.client.config.VoxyConfigMenu"
+    ],
     "main": [
       "me.cortex.voxy.commonImpl.VoxyCommon"
     ]
@@ -35,15 +38,10 @@
     "common.voxy.mixins.json"
   ],
   "depends": {
-    "minecraft": ["1.20.1"],
+    "minecraft": ["1.21.1"],
     "fabricloader": ">=0.14.22",
-    "fabric-api": ">=0.91.1",
-    "sodium": ">=0.5.11 <0.6.0"
-  },
-  "suggests": {
-    "java": ">=21"
-  },
-  "suggests": {
+    "fabric-api": ">=0.102.0",
+    "sodium": ">=0.8.12-alpha.3 <0.9.0",
     "java": ">=21"
   },
   "conflicts": {

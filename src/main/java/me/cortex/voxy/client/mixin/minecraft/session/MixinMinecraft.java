@@ -9,7 +9,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
-    @Inject(method = "clearLevel()V", at = @At("TAIL"))
+    //1.21.1: every disconnect overload ends in disconnect(Screen, boolean)
+    @Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;Z)V", at = @At("TAIL"))
     private void voxy$injectWorldClose(CallbackInfo ci) {
         if (ClientSessionEvents.inSession) {
             ClientSessionEvents.sessionEnd();
